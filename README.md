@@ -20,7 +20,7 @@ Built for **Mithila Medico** — a real, trusted pharmacy in Gardanibagh, Patna,
 
 Mithila Medico is a real pharmacy in Gardanibagh, Patna that has been running since 1994. In real life, it operates entirely offline — customers either walk in or place orders over WhatsApp.
 
-I'm a **1st-year B.Tech CSE student**, and after just **one week of attending college**, I decided to build something real. I looked at this pharmacy and thought: *"What if I could digitize the entire operation — the ordering, the inventory, the billing, the tracking — everything?"*
+I'm a **1st-year B.Tech CSE student**, and I decided to build something real. I looked at this pharmacy and thought: *"What if I could digitize the entire operation — the ordering, the inventory, the billing, the tracking — everything?"*
 
 **I designed and architected every single aspect of this application myself** — the feature set, the database schema, the user flows, the role-based access system, the order lifecycle, the billing logic, the analytics dashboards, the UI/UX — all of it came from my own understanding and vision. While I used AI as a coding and debugging assistant, every architectural decision, every feature, and every design choice is mine.
 
@@ -500,7 +500,7 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 ## 👨‍💻 Author
 
 **Priyanshu Kumar**
-- 1st Year B.Tech CSE Student
+- 1st Year B.Tech CST Student at sage university indore.
 - GitHub: [@priyanshu-kumar952](https://github.com/priyanshu-kumar952)
 
 ---
