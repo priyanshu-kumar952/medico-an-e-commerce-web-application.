@@ -1,0 +1,17 @@
+node_modules/
+.next/
+.git/
+.cursor/
+
+.env
+.env.*
+
+*.log
+*.db
+*.db-*
+*.bak
+
+public/uploads/
+
+Dockerfile
+docker-compose.yml
