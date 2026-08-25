@@ -11,8 +11,10 @@ function BatchDatePicker({ value, onChange, label, required = false }) {
     const [day, setDay] = useState('');
     const [month, setMonth] = useState('');
     const [year, setYear] = useState('');
+    const [prevValue, setPrevValue] = useState(value);
 
-    useEffect(() => {
+    if (value !== prevValue) {
+        setPrevValue(value);
         if (value && value.includes('-')) {
             const [y, m, d] = value.split('-');
             setYear(y || '');
@@ -23,7 +25,7 @@ function BatchDatePicker({ value, onChange, label, required = false }) {
             setMonth('');
             setYear('');
         }
-    }, [value]);
+    }
 
     const handleDayChange = (v) => {
         const val = v.replace(/\D/g, '').slice(0, 2);

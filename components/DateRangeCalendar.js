@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export function DateRangeCalendar({ onRangeSelect }) {
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -9,27 +9,28 @@ export function DateRangeCalendar({ onRangeSelect }) {
     const [dailySales, setDailySales] = useState({});
 
     useEffect(() => {
-        fetchDailySales();
-    }, [currentDate]);
-
-    const fetchDailySales = async () => {
-        try {
-            const year = currentDate.getFullYear();
-            const month = currentDate.getMonth() + 1;
-            const res = await fetch(`/api/stats/daily-sales?year=${year}&month=${month}`);
-            const data = await res.json();
-            if (data.data) {
-                // Transform array to object for easier heatmap lookup
-                const salesMap = {};
-                data.data.forEach(item => {
-                    salesMap[item.date] = item.orders;
-                });
-                setDailySales(salesMap);
+        let ignore = false;
+        async function fetchDailySales() {
+            try {
+                const year = currentDate.getFullYear();
+                const month = currentDate.getMonth() + 1;
+                const res = await fetch(`/api/stats/daily-sales?year=${year}&month=${month}`);
+                const data = await res.json();
+                if (!ignore && data.data) {
+                    // Transform array to object for easier heatmap lookup
+                    const salesMap = {};
+                    data.data.forEach(item => {
+                        salesMap[item.date] = item.orders;
+                    });
+                    setDailySales(salesMap);
+                }
+            } catch (err) {
+                console.error('Failed to fetch daily sales', err);
             }
-        } catch (err) {
-            console.error('Failed to fetch daily sales', err);
         }
-    };
+        fetchDailySales();
+        return () => { ignore = true; };
+    }, [currentDate]);
 
     const getDaysInMonth = (date) => {
         return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();

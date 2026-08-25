@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import Navbar from '@/components/Navbar';
 import { ToastProvider, useToast } from '@/components/Toast';
 import Link from 'next/link';
@@ -14,13 +14,56 @@ function HistoryContent() {
     const [searched, setSearched] = useState(false);
     const addToast = useToast();
 
+    const performSearch = useCallback(async (query) => {
+        if (!query.trim()) return addToast('Please enter your phone number', 'error');
+
+        setLoading(true);
+        setSearched(true);
+        setOrdersList([]);
+        try {
+            // First try ID search (in case they put bill id)
+            let res = await fetch(`/api/orders/${encodeURIComponent(query.trim())}`);
+            if (res.ok) {
+                const data = await res.json();
+                setOrdersList([{ order: data.order, items: data.items }]);
+                return;
+            }
+
+            // Fallback to phone search (History mode enabled: show COMPLETED)
+            res = await fetch(`/api/orders?phone=${encodeURIComponent(query.trim())}`);
+            const data = await res.json();
+            if (data.orders && data.orders.length > 0) {
+                // Filter out CANCELLED but show COMPLETED and others
+                let filteredOrders = data.orders.filter(o => o.status !== 'CANCELLED');
+                
+                if (filteredOrders.length === 0) {
+                    addToast('No order history found', 'info');
+                    return;
+                }
+                const detailsPromises = filteredOrders.map(o => fetch(`/api/orders/${o.order_id}`).then(r => r.json()));
+                const details = await Promise.all(detailsPromises);
+                setOrdersList(details);
+            } else {
+                addToast('No order history found', 'error');
+            }
+        } catch (err) {
+            addToast('Search failed', 'error');
+        } finally {
+            setLoading(false);
+        }
+    }, [addToast]);
+
+    const searchOrder = () => {
+        performSearch(searchValue);
+    };
+
     useEffect(() => {
         const phone = searchParams.get('phone');
         if (phone) {
             setSearchValue(phone);
-            searchOrder();
+            performSearch(phone);
         }
-    }, [searchParams]);
+    }, [searchParams, performSearch]);
 
     const getStatusIndex = (status) => {
         if (status === 'CANCELLED') return -1;
@@ -89,45 +132,6 @@ function HistoryContent() {
             </div>
         </body></html>`);
         printWindow.document.close();
-    };
-
-    const searchOrder = async () => {
-        if (!searchValue.trim()) return addToast('Please enter your phone number', 'error');
-
-        setLoading(true);
-        setSearched(true);
-        setOrdersList([]);
-        try {
-            // First try ID search (in case they put bill id)
-            let res = await fetch(`/api/orders/${encodeURIComponent(searchValue.trim())}`);
-            if (res.ok) {
-                const data = await res.json();
-                setOrdersList([{ order: data.order, items: data.items }]);
-                return;
-            }
-
-            // Fallback to phone search (History mode enabled: show COMPLETED)
-            res = await fetch(`/api/orders?phone=${encodeURIComponent(searchValue.trim())}`);
-            const data = await res.json();
-            if (data.orders && data.orders.length > 0) {
-                // Filter out CANCELLED but show COMPLETED and others
-                let filteredOrders = data.orders.filter(o => o.status !== 'CANCELLED');
-                
-                if (filteredOrders.length === 0) {
-                    addToast('No order history found', 'info');
-                    return;
-                }
-                const detailsPromises = filteredOrders.map(o => fetch(`/api/orders/${o.order_id}`).then(r => r.json()));
-                const details = await Promise.all(detailsPromises);
-                setOrdersList(details);
-            } else {
-                addToast('No order history found', 'error');
-            }
-        } catch (err) {
-            addToast('Search failed', 'error');
-        } finally {
-            setLoading(false);
-        }
     };
 
     return (
@@ -230,7 +234,7 @@ function HistoryContent() {
                         <div className="empty-state" style={{ marginTop: '3rem' }}>
                             <div className="icon">📂</div>
                             <h3>No Orders Found</h3>
-                            <p style={{ marginTop: '0.5rem' }}>We couldn't find any previous orders for this phone number.</p>
+                            <p style={{ marginTop: '0.5rem' }}>We couldn&apos;t find any previous orders for this phone number.</p>
                         </div>
                     )}
                 </div>

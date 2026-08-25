@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import Navbar from '@/components/Navbar';
 import { ToastProvider, useToast } from '@/components/Toast';
 import Link from 'next/link';
@@ -14,14 +14,61 @@ function TrackContent() {
     const [searched, setSearched] = useState(false);
     const addToast = useToast();
 
+    const performSearch = useCallback(async (query, isHistory = false) => {
+        if (!query.trim()) return addToast('Please enter an Order ID or phone number', 'error');
+
+        setLoading(true);
+        setSearched(true);
+        setOrdersList([]);
+        try {
+            // First try ID search
+            let res = await fetch(`/api/orders/${encodeURIComponent(query.trim())}`);
+            if (res.ok) {
+                const data = await res.json();
+                setOrdersList([{ order: data.order, items: data.items }]);
+                return;
+            }
+
+            // Fallback to phone search
+            res = await fetch(`/api/orders?phone=${encodeURIComponent(query.trim())}`);
+            const data = await res.json();
+            if (data.orders && data.orders.length > 0) {
+                let filteredOrders = data.orders.filter(o => o.status !== 'CANCELLED');
+                
+                // If not history mode, only show active orders (not completed)
+                if (!isHistory) {
+                    filteredOrders = filteredOrders.filter(o => o.status !== 'COMPLETED');
+                }
+
+                if (filteredOrders.length === 0) {
+                    addToast(isHistory ? 'No order history found' : 'No active orders found', 'info');
+                    return;
+                }
+                const detailsPromises = filteredOrders.map(o => fetch(`/api/orders/${o.order_id}`).then(r => r.json()));
+                const details = await Promise.all(detailsPromises);
+                setOrdersList(details);
+            } else {
+                addToast('No order found', 'error');
+            }
+        } catch (err) {
+            addToast('Search failed', 'error');
+        } finally {
+            setLoading(false);
+        }
+    }, [addToast]);
+
+    const searchOrder = (isHistory = false) => {
+        performSearch(searchValue, isHistory);
+    };
+
     useEffect(() => {
         const phone = searchParams.get('phone');
         const history = searchParams.get('history');
         if (phone) {
             setSearchValue(phone);
-            searchOrder(history === 'true');
+            performSearch(phone, history === 'true');
         }
-    }, [searchParams]);
+    }, [searchParams, performSearch]);
 
     // Customer-visible statuses mapped to strictly defined DB states
     const statuses = ['Order Received', 'Order Packed', 'Order Collected'];
@@ -93,49 +140,6 @@ function TrackContent() {
             </div>
         </body></html>`);
         printWindow.document.close();
-    };
-
-    const searchOrder = async (isHistory = false) => {
-        if (!searchValue.trim()) return addToast('Please enter an Order ID or phone number', 'error');
-
-        setLoading(true);
-        setSearched(true);
-        setOrdersList([]);
-        try {
-            // First try ID search
-            let res = await fetch(`/api/orders/${encodeURIComponent(searchValue.trim())}`);
-            if (res.ok) {
-                const data = await res.json();
-                setOrdersList([{ order: data.order, items: data.items }]);
-                return;
-            }
-
-            // Fallback to phone search
-            res = await fetch(`/api/orders?phone=${encodeURIComponent(searchValue.trim())}`);
-            const data = await res.json();
-            if (data.orders && data.orders.length > 0) {
-                let filteredOrders = data.orders.filter(o => o.status !== 'CANCELLED');
-                
-                // If not history mode, only show active orders (not completed)
-                if (!isHistory) {
-                    filteredOrders = filteredOrders.filter(o => o.status !== 'COMPLETED');
-                }
-
-                if (filteredOrders.length === 0) {
-                    addToast(isHistory ? 'No order history found' : 'No active orders found', 'info');
-                    return;
-                }
-                const detailsPromises = filteredOrders.map(o => fetch(`/api/orders/${o.order_id}`).then(r => r.json()));
-                const details = await Promise.all(detailsPromises);
-                setOrdersList(details);
-            } else {
-                addToast('No order found', 'error');
-            }
-        } catch (err) {
-            addToast('Search failed', 'error');
-        } finally {
-            setLoading(false);
-        }
     };
 
     const cancelOrder = async (orderId) => {
@@ -355,7 +359,7 @@ function TrackContent() {
                         <div className="empty-state" style={{ marginTop: '3rem' }}>
                             <div className="icon">🔍</div>
                             <h3>No Active Orders Found</h3>
-                            <p style={{ marginTop: '0.5rem' }}>We couldn't track any active orders for this phone number.</p>
+                            <p style={{ marginTop: '0.5rem' }}>We couldn&apos;t track any active orders for this phone number.</p>
                         </div>
                     )}
                 </div>
@@ -367,7 +371,9 @@ function TrackContent() {
 export default function TrackPage() {
     return (
         <ToastProvider>
-            <TrackContent />
+            <Suspense fallback={<div className="loading-page"><div className="spinner" style={{ width: '40px', height: '40px' }}></div></div>}>
+                <TrackContent />
+            </Suspense>
         </ToastProvider>
     );
 }

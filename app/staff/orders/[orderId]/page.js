@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, useCallback, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ToastProvider, useToast } from '@/components/Toast';
@@ -25,7 +25,7 @@ function OrderDetailContent({ orderId }) {
         setStaff(JSON.parse(stored));
     }, [router]);
 
-    const fetchOrder = async () => {
+    const fetchOrder = useCallback(async () => {
         try {
             const res = await fetch(`/api/orders/${orderId}`);
             const data = await res.json();
@@ -41,9 +41,9 @@ function OrderDetailContent({ orderId }) {
             else { addToast('Order not found', 'error'); }
         } catch (err) { addToast('Failed to load order', 'error'); }
         finally { setLoading(false); }
-    };
+    }, [orderId, addToast]);
 
-    const fetchInventory = async () => {
+    const fetchInventory = useCallback(async () => {
         try {
             const res = await fetch(`/api/medicines`);
             const data = await res.json();
@@ -53,14 +53,14 @@ function OrderDetailContent({ orderId }) {
         } catch (err) {
             console.error('Failed to load inventory for packing');
         }
-    };
+    }, []);
 
     useEffect(() => { 
         if (staff) { 
             fetchOrder();
             fetchInventory();
         } 
-    }, [staff]);
+    }, [staff, fetchOrder, fetchInventory]);
 
     const handleBatchChange = (index, medicineId) => {
         const newPackingItems = [...packingItems];

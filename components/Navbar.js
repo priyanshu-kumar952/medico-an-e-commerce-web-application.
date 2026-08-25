@@ -5,24 +5,23 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 
 export default function Navbar() {
-    const [mounted, setMounted] = useState(false);
     const [scrolled, setScrolled] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const router = useRouter();
     const pathname = usePathname();
 
+    const [prevPathname, setPrevPathname] = useState(pathname);
+    if (pathname !== prevPathname) {
+        setPrevPathname(pathname);
+        setIsMenuOpen(false);
+    }
+
     useEffect(() => {
-        setMounted(true);
         const handleScroll = () => setScrolled(window.scrollY > 50);
         handleScroll(); // check initial scroll position
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
-
-    // Close menu on route change
-    useEffect(() => {
-        setIsMenuOpen(false);
-    }, [pathname]);
 
     const handleHomeClick = (e) => {
         e.preventDefault();
@@ -36,12 +35,12 @@ export default function Navbar() {
     const isStaffArea = pathname?.startsWith('/staff') || pathname?.startsWith('/admin');
 
     return (
-        <nav className={`navbar ${mounted && (scrolled || isStaffArea) ? 'scrolled' : ''}`}>
+        <nav className={`navbar ${scrolled || isStaffArea ? 'scrolled' : ''}`}>
             <div className="container">
-                <a href="/" onClick={handleHomeClick} className="logo">
+                <Link href="/" onClick={handleHomeClick} className="logo">
                     <span className="logo-icon">🏥</span>
                     Mithila Medico
-                </a>
+                </Link>
 
                 <button
                     className={`menu-toggle ${isMenuOpen ? 'active' : ''}`}
