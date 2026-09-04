@@ -17,8 +17,10 @@ export async function GET(request) {
     const db = getDb();
 
     let dateFilter = '';
+    const params = [];
     if (startDate && endDate) {
-      dateFilter = ` AND DATE(o.created_at) BETWEEN '${startDate}' AND '${endDate}'`;
+      dateFilter = ` AND DATE(o.created_at) BETWEEN ? AND ?`;
+      params.push(startDate, endDate);
     } else if (dateRange === 'day') {
       dateFilter = " AND DATE(o.created_at) = DATE('now', 'localtime')";
     } else if (dateRange === 'week') {
@@ -38,7 +40,7 @@ export async function GET(request) {
       GROUP BY oi.medicine_name
       ORDER BY total_quantity DESC
       LIMIT 20
-    `).all();
+    `).all(...params);
 
     return NextResponse.json({ medicines: topMedicines });
   } catch (error) {

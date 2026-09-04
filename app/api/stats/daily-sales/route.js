@@ -19,11 +19,14 @@ export async function GET(request) {
         const db = getDb();
         
         let dateFilter = '';
+        const params = [];
         if (year && month) {
             const formattedMonth = String(month).padStart(2, '0');
-            dateFilter = ` AND strftime('%Y-%m', o.created_at) = '${year}-${formattedMonth}'`;
+            dateFilter = ` AND strftime('%Y-%m', o.created_at) = ?`;
+            params.push(`${year}-${formattedMonth}`);
         } else if (startDate && endDate) {
-            dateFilter = ` AND DATE(o.created_at) BETWEEN '${startDate}' AND '${endDate}'`;
+            dateFilter = ` AND DATE(o.created_at) BETWEEN ? AND ?`;
+            params.push(startDate, endDate);
         } else if (dateRange === 'day') {
             dateFilter = " AND DATE(o.created_at) = DATE('now', 'localtime')";
         } else if (dateRange === 'yesterday') {
@@ -53,7 +56,7 @@ export async function GET(request) {
             ${dateFilter}
             GROUP BY DATE(o.created_at)
             ORDER BY date ASC
-        `).all();
+        `).all(...params);
 
         return NextResponse.json({ data: sales });
 

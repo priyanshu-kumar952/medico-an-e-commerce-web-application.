@@ -19,9 +19,11 @@ export async function GET(request) {
     const db = getDb();
 
     let dateFilter = '';
+    const dateParams = [];
     if (startDate && endDate) {
       // Custom date range
-      dateFilter = ` AND DATE(created_at) BETWEEN '${startDate}' AND '${endDate}'`;
+      dateFilter = ` AND DATE(created_at) BETWEEN ? AND ?`;
+      dateParams.push(startDate, endDate);
     } else if (dateRange === 'day') {
       dateFilter = " AND DATE(created_at) = DATE('now', 'localtime')";
     } else if (dateRange === 'yesterday') {
@@ -32,11 +34,11 @@ export async function GET(request) {
       dateFilter = " AND DATE(created_at) >= DATE('now', 'localtime', 'start of month')";
     }
 
-    const placed = db.prepare(`SELECT COUNT(*) as count FROM orders WHERE status = 'PLACED'${dateFilter}`).get().count;
-    const packed = db.prepare(`SELECT COUNT(*) as count FROM orders WHERE status = 'PACKED'${dateFilter}`).get().count;
-    const completed = db.prepare(`SELECT COUNT(*) as count FROM orders WHERE status = 'COMPLETED'${dateFilter}`).get().count;
-    const cancelled = db.prepare(`SELECT COUNT(*) as count FROM orders WHERE status = 'CANCELLED'${dateFilter}`).get().count;
-    const totalOrders = db.prepare(`SELECT COUNT(*) as count FROM orders WHERE 1=1${dateFilter}`).get().count;
+    const placed = db.prepare(`SELECT COUNT(*) as count FROM orders WHERE status = 'PLACED'${dateFilter}`).get(...dateParams).count;
+    const packed = db.prepare(`SELECT COUNT(*) as count FROM orders WHERE status = 'PACKED'${dateFilter}`).get(...dateParams).count;
+    const completed = db.prepare(`SELECT COUNT(*) as count FROM orders WHERE status = 'COMPLETED'${dateFilter}`).get(...dateParams).count;
+    const cancelled = db.prepare(`SELECT COUNT(*) as count FROM orders WHERE status = 'CANCELLED'${dateFilter}`).get(...dateParams).count;
+    const totalOrders = db.prepare(`SELECT COUNT(*) as count FROM orders WHERE 1=1${dateFilter}`).get(...dateParams).count;
 
     const todayRevenue = db.prepare(`
       SELECT COALESCE(SUM(b.final_amount), 0) as total
@@ -79,8 +81,10 @@ export async function GET(request) {
       JOIN orders o ON oi.order_id = o.order_id
       WHERE o.status = 'COMPLETED'
     `;
+    const unitsParams = [];
     if (startDate && endDate) {
-      unitsSql += ` AND DATE(o.created_at) BETWEEN '${startDate}' AND '${endDate}'`;
+      unitsSql += ` AND DATE(o.created_at) BETWEEN ? AND ?`;
+      unitsParams.push(startDate, endDate);
     } else if (dateRange === 'day') {
       unitsSql += " AND DATE(o.created_at) = DATE('now', 'localtime')";
     } else if (dateRange === 'yesterday') {
@@ -90,10 +94,10 @@ export async function GET(request) {
     } else if (dateRange === 'month') {
       unitsSql += " AND DATE(o.created_at) >= DATE('now', 'localtime', 'start of month')";
     }
-    const totalUnits = db.prepare(unitsSql).get().units;
+    const totalUnits = db.prepare(unitsSql).get(...unitsParams).units;
 
     // AOV calculation (Revenue / Completed Orders in timeframe)
-    const completedOrdersInTimeframe = db.prepare(`SELECT COUNT(*) as count FROM orders WHERE status = 'COMPLETED'${dateFilter}`).get().count;
+    const completedOrdersInTimeframe = db.prepare(`SELECT COUNT(*) as count FROM orders WHERE status = 'COMPLETED'${dateFilter}`).get(...dateParams).count;
     const aov = completedOrdersInTimeframe > 0 ? filteredRevenue / completedOrdersInTimeframe : 0;
 
     const totalRevenue = db.prepare(`

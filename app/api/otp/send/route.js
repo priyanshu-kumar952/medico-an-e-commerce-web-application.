@@ -33,11 +33,13 @@ export async function POST(request) {
 
         // TODO: In production, integrate with MSG91, Twilio, or Fast2SMS here.
         // For development, we log it clearly to the console so the user can type it in.
-        console.log(`\n================================`);
-        console.log(`📡 DEV MODE SMS SIMULATOR`);
-        console.log(`To: +91 ${phoneTrimmed}`);
-        console.log(`Message: Your Mithila Medico verification code is: ${otpCode}. It is valid for 5 minutes.`);
-        console.log(`================================\n`);
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`\n================================`);
+            console.log(`📡 DEV MODE SMS SIMULATOR`);
+            console.log(`To: +91 ${phoneTrimmed}`);
+            console.log(`Message: Your Mithila Medico verification code is: ${otpCode}. It is valid for 5 minutes.`);
+            console.log(`================================\n`);
+        }
 
         return NextResponse.json({ success: true, message: 'OTP sent successfully' });
     } catch (error) {
