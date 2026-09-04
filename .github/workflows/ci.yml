@@ -70,47 +70,33 @@ jobs:
             NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
             NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}
 
-      - name: Deploy to EC2
+      - name: Configure AWS credentials
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
-          EC2_SSH_KEY_B64: ${{ secrets.EC2_SSH_KEY_B64 }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ap-south-1
+
+      - name: Deploy to EC2 via SSM
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-
-          echo "$EC2_SSH_KEY_B64" | base64 -d > ~/.ssh/medico_key
-          chmod 600 ~/.ssh/medico_key
-
-          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
-
-          ssh -i ~/.ssh/medico_key "$EC2_USERNAME@$EC2_HOST" << 'EOF'
-            set -e
-
-            echo "Pulling latest Medico image..."
-            docker pull ghcr.io/priyanshu-kumar952/medico:latest
-
-            echo "Stopping old container..."
-            docker stop medico || true
-
-            echo "Removing old container..."
-            docker rm medico || true
-
-            echo "Starting new container..."
-            docker run -d \
-              --name medico \
-              --restart unless-stopped \
-              --env-file ~/medico.env \
-              -p 3000:3000 \
-              -v medico-db-data:/app/data \
-              ghcr.io/priyanshu-kumar952/medico:latest
-
-            echo "Waiting for application..."
-            sleep 5
-
-            echo "Checking application health..."
-            curl --fail http://localhost:3000/api/health
-
-            echo "Deployment successful!"
-          EOF
+          aws ssm send-command \
+            --instance-ids "i-024d68bee123da607" \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=[
+              "set -e",
+              "echo Pulling latest Medico image...",
+              "docker pull ghcr.io/priyanshu-kumar952/medico:latest",
+              "echo Stopping old container...",
+              "docker stop medico || true",
+              "echo Removing old container...",
+              "docker rm medico || true",
+              "echo Starting new container...",
+              "docker run -d --name medico --restart unless-stopped --env-file ~/medico.env -p 3000:3000 -v medico-db-data:/app/data ghcr.io/priyanshu-kumar952/medico:latest",
+              "echo Waiting for application...",
+              "sleep 5",
+              "echo Checking application health...",
+              "curl --fail http://localhost:3000/api/health",
+              "echo Deployment successful!"
+            ]' \
+            --comment "Deploy Medico ${{ github.sha }}"
