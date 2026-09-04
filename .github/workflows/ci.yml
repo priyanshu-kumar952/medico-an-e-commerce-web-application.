@@ -74,12 +74,12 @@ jobs:
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
-          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_SSH_KEY_B64: ${{ secrets.EC2_SSH_KEY_B64 }}
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
-          echo "$EC2_SSH_KEY" > ~/.ssh/medico_key
+          echo "$EC2_SSH_KEY_B64" | base64 -d > ~/.ssh/medico_key
           chmod 600 ~/.ssh/medico_key
 
           ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
