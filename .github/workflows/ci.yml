@@ -70,30 +70,6 @@ jobs:
             NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
             NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}
 
-      - name: Debug GitHub OIDC claims
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
-        run: |
-          TOKEN=$(curl -sSf \
-            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
-            | jq -r '.value')
-
-          python3 -c '
-          import sys, json, base64
-          token = sys.stdin.read().strip()
-          payload = token.split(".")[1]
-          payload += "=" * (-len(payload) % 4)
-          claims = json.loads(base64.urlsafe_b64decode(payload))
-          print(json.dumps({
-              "iss": claims.get("iss"),
-              "aud": claims.get("aud"),
-              "sub": claims.get("sub")
-          }, indent=2))
-          ' <<< "$TOKEN"
-
       - name: Configure AWS credentials
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: aws-actions/configure-aws-credentials@v4
@@ -104,23 +80,86 @@ jobs:
       - name: Deploy to EC2 via SSM
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          aws ssm send-command \
-            --instance-ids "i-024d68bee123da607" \
+          INSTANCE_ID="i-024d68bee123da607"
+
+          echo "Sending deployment command to EC2..."
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --parameters 'commands=[
               "set -e",
               "echo Pulling latest Medico image...",
-              "docker pull ghcr.io/priyanshu-kumar952/medico:latest",
+              "sudo -u ubuntu -H docker pull ghcr.io/priyanshu-kumar952/medico:latest",
               "echo Stopping old container...",
-              "docker stop medico || true",
+              "sudo -u ubuntu docker stop medico || true",
               "echo Removing old container...",
-              "docker rm medico || true",
+              "sudo -u ubuntu docker rm medico || true",
               "echo Starting new container...",
-              "docker run -d --name medico --restart unless-stopped --env-file ~/medico.env -p 3000:3000 -v medico-db-data:/app/data ghcr.io/priyanshu-kumar952/medico:latest",
+              "sudo -u ubuntu docker run -d --name medico --restart unless-stopped --env-file /home/ubuntu/medico.env -p 3000:3000 -v medico-db-data:/app/data ghcr.io/priyanshu-kumar952/medico:latest",
               "echo Waiting for application...",
               "sleep 5",
               "echo Checking application health...",
               "curl --fail http://localhost:3000/api/health",
               "echo Deployment successful!"
             ]' \
-            --comment "Deploy Medico ${{ github.sha }}"
+            --comment "Deploy Medico ${{ github.sha }}" \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "SSM Command ID: $COMMAND_ID"
+          echo "Waiting for EC2 deployment to complete..."
+
+          for i in {1..60}; do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --query "Status" \
+              --output text 2>/dev/null || echo "Pending")
+
+            echo "Current status: $STATUS"
+
+            case "$STATUS" in
+              Success)
+                echo "========================================"
+                echo "EC2 DEPLOYMENT SUCCEEDED"
+                echo "========================================"
+
+                aws ssm get-command-invocation \
+                  --command-id "$COMMAND_ID" \
+                  --instance-id "$INSTANCE_ID" \
+                  --query "{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}" \
+                  --output json
+
+                exit 0
+                ;;
+
+              Failed|Cancelled|TimedOut|Cancelling)
+                echo "========================================"
+                echo "EC2 DEPLOYMENT FAILED"
+                echo "========================================"
+
+                aws ssm get-command-invocation \
+                  --command-id "$COMMAND_ID" \
+                  --instance-id "$INSTANCE_ID" \
+                  --query "{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}" \
+                  --output json
+
+                exit 1
+                ;;
+            esac
+
+            sleep 5
+          done
+
+          echo "========================================"
+          echo "EC2 DEPLOYMENT TIMED OUT"
+          echo "========================================"
+
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --query "{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}" \
+            --output json || true
+
+          exit 1
