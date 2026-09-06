@@ -38,7 +38,7 @@ export async function POST(request) {
         const cookieStore = await cookies();
         cookieStore.set('medico_session', token, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
+            secure: process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE !== 'false',
             sameSite: 'strict',
             path: '/',
             maxAge: 60 * 60 * 24 // 24 hours
