@@ -5,7 +5,12 @@ import { useState, useEffect } from 'react';
 export default function ExpiryAlerts({ onClose }) {
     const [medicines, setMedicines] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [groups, setGroups] = useState({ expired: [], critical: [], warning: [] });
+    const [groups, setGroups] = useState({
+        lowStock: [],
+        expired: [],
+        critical: [],
+        warning: []
+    });
 
     useEffect(() => {
         fetchMedicines();
@@ -38,6 +43,16 @@ export default function ExpiryAlerts({ onClose }) {
             // The user's example says "expiry_date - current_date".
             return new Date(parseInt(year), parseInt(mm) - 1, 1);
         }
+        const match = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+        if (match) {
+            return new Date(
+                Number(match[1]),
+                Number(match[2]) - 1,
+                Number(match[3])
+            );
+        }
+
         return new Date(dateStr);
     };
 
@@ -45,17 +60,60 @@ export default function ExpiryAlerts({ onClose }) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
+        const lowStock = [];
         const expired = [];
         const critical = [];
         const warning = [];
 
+        // Inventory is batch-level. Aggregate stock by medicine
+        // for low-stock detection.
+        const stockByMedicine = new Map();
+
         meds.forEach(med => {
+            if (!stockByMedicine.has(med.id)) {
+                stockByMedicine.set(med.id, {
+                    ...med,
+                    totalStock: 0
+                });
+            }
+
+            stockByMedicine.get(med.id).totalStock += Number(
+                med.stock_quantity || 0
+            );
+        });
+
+        stockByMedicine.forEach(med => {
+            const threshold = Number(med.low_stock_threshold ?? 10);
+
+            if (med.totalStock <= threshold) {
+                lowStock.push({
+                    ...med,
+                    stock_quantity: med.totalStock,
+                    totalStock: med.totalStock
+                });
+            }
+        });
+
+        // Expiry is checked per active batch.
+        meds.forEach(med => {
+            const stock = Number(med.stock_quantity || 0);
+
+            if (stock <= 0) return;
+
             const expiry = parseDate(med.expiry_date);
+
             if (!expiry || isNaN(expiry.getTime())) return;
 
-            const days = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+            expiry.setHours(0, 0, 0, 0);
 
-            const medData = { ...med, daysRemaining: days };
+            const days = Math.ceil(
+                (expiry - today) / (1000 * 60 * 60 * 24)
+            );
+
+            const medData = {
+                ...med,
+                daysRemaining: days
+            };
 
             if (days <= 0) {
                 expired.push(medData);
@@ -66,13 +124,19 @@ export default function ExpiryAlerts({ onClose }) {
             }
         });
 
-        // Sorting by closest expiry date
-        const sortByExpiry = (a, b) => a.daysRemaining - b.daysRemaining;
+        const sortByExpiry = (a, b) =>
+            a.daysRemaining - b.daysRemaining;
+
+        lowStock.sort((a, b) => a.totalStock - b.totalStock);
+        expired.sort(sortByExpiry);
+        critical.sort(sortByExpiry);
+        warning.sort(sortByExpiry);
 
         setGroups({
-            expired: expired.sort(sortByExpiry),
-            critical: critical.sort(sortByExpiry),
-            warning: warning.sort(sortByExpiry)
+            lowStock,
+            expired,
+            critical,
+            warning
         });
     };
 
@@ -124,6 +188,104 @@ export default function ExpiryAlerts({ onClose }) {
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                         
+                        {/* LOW STOCK SECTION */}
+                        <section>
+                            <div style={{
+                                background: 'rgba(255, 169, 64, 0.15)',
+                                padding: '0.75rem 1.25rem',
+                                borderRadius: '8px',
+                                borderLeft: '4px solid #ffa940',
+                                marginBottom: '1rem',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                            }}>
+                                <h3 style={{
+                                    color: '#ffa940',
+                                    margin: 0,
+                                    fontSize: '1.1rem'
+                                }}>
+                                    Low Stock
+                                </h3>
+
+                                <span style={{
+                                    background: '#ffa940',
+                                    color: 'black',
+                                    padding: '2px 8px',
+                                    borderRadius: '4px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 'bold'
+                                }}>
+                                    {groups.lowStock.length} ITEMS
+                                </span>
+                            </div>
+
+                            {groups.lowStock.length === 0 ? (
+                                <p style={{
+                                    color: 'var(--text-muted)',
+                                    fontSize: '0.85rem',
+                                    textAlign: 'center',
+                                    padding: '1rem'
+                                }}>
+                                    No low-stock medicines found.
+                                </p>
+                            ) : (
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table
+                                        className="invoice-table"
+                                        style={{ marginBottom: 0 }}
+                                    >
+                                        <thead>
+                                            <tr>
+                                                <th style={{ background: 'transparent' }}>
+                                                    Medicine Name
+                                                </th>
+                                                <th
+                                                    style={{ background: 'transparent' }}
+                                                    className="text-right"
+                                                >
+                                                    Stock
+                                                </th>
+                                                <th
+                                                    style={{ background: 'transparent' }}
+                                                    className="text-right"
+                                                >
+                                                    Threshold
+                                                </th>
+                                            </tr>
+                                        </thead>
+
+                                        <tbody>
+                                            {groups.lowStock.map(med => (
+                                                <tr key={`low-stock-${med.id}`}>
+                                                    <td style={{ fontWeight: '500' }}>
+                                                        {med.name}
+                                                    </td>
+
+                                                    <td
+                                                        className="text-right"
+                                                        style={{ fontWeight: '600' }}
+                                                    >
+                                                        {med.totalStock}
+                                                    </td>
+
+                                                    <td
+                                                        className="text-right"
+                                                        style={{
+                                                            color: '#ffa940',
+                                                            fontWeight: '600'
+                                                        }}
+                                                    >
+                                                        {med.low_stock_threshold}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </section>
+
                         {/* EXPIRED SECTION */}
                         <section>
                             <div style={{ 
@@ -228,8 +390,19 @@ function ExpiryTable({ medicines, color }) {
                 </thead>
                 <tbody>
                     {medicines.map(med => (
-                        <tr key={med.id}>
-                            <td style={{ fontWeight: '500' }}>{med.name}</td>
+                        <tr key={`expiry-${med.batch_id}-${med.id}`}>
+                            <td style={{ fontWeight: '500' }}>
+                                {med.name}
+                                {med.batch_no && (
+                                    <div style={{
+                                        fontSize: '0.7rem',
+                                        color: 'var(--text-muted)',
+                                        marginTop: '2px'
+                                    }}>
+                                        Batch: {med.batch_no}
+                                    </div>
+                                )}
+                            </td>
                             <td className="text-right" style={{ fontWeight: '600' }}>{med.stock_quantity}</td>
                             <td className="text-right" style={{ color: color }}>{med.expiry_date}</td>
                             <td className="text-right">

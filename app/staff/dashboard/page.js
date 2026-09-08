@@ -463,7 +463,7 @@ function DashboardContent() {
 
                 {activeTab === 'inventory' && <InventoryPanel staff={staff} />}
 
-                {activeTab === 'logs' && <OrderLogsPanel />}
+                {activeTab === 'logs' && <OrderLogsPanel dateRange={dateRange} customDateRange={customDateRange} />}
             </div>
         </div>
     );
@@ -476,7 +476,7 @@ function InventoryPanel({ staff }) {
     const [category, setCategory] = useState('');
     const [loading, setLoading] = useState(true);
     const [expandedMed, setExpandedMed] = useState(null);
-    const [restockingId, setRestockingId] = useState(null); 
+    const [restockingId, setRestockingId] = useState(null);
     const [addingBatchMedId, setAddingBatchMedId] = useState(null);
     const [restockData, setRestockData] = useState({
         quantity: '', mfd_date: '', expiry_date: '', batch_no: '', mrp: '', discount_percent: '0', type: 'add', reason: ''
@@ -526,7 +526,7 @@ function InventoryPanel({ staff }) {
                 res = await fetch(`/api/batches/${restockingId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                         is_edit: isEdit,
                         type: isEdit ? 'add' : restockData.type,
                         quantity: isEdit ? 0 : parseInt(restockData.quantity),
@@ -546,7 +546,7 @@ function InventoryPanel({ staff }) {
                 res = await fetch('/api/batches', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                         medicine_id: addingBatchMedId,
                         batch_no: restockData.batch_no,
                         mrp: parseFloat(restockData.mrp),
@@ -608,10 +608,10 @@ function InventoryPanel({ staff }) {
     const openAdjustModal = (batch) => {
         setRestockingId(batch.batch_id);
         setAddingBatchMedId(null);
-        setRestockData({ 
-            quantity: batch.stock_quantity || 0, 
+        setRestockData({
+            quantity: batch.stock_quantity || 0,
             type: 'edit',
-            reason: '', 
+            reason: '',
             batch_no: batch.batch_no,
             mrp: batch.mrp,
             discount_percent: batch.batch_discount || 0,
@@ -619,6 +619,35 @@ function InventoryPanel({ staff }) {
             expiry_date: batch.expiry_date || '',
             is_used: batch.is_used
         });
+    };
+
+    const handleUpdateThreshold = async (medId, threshold) => {
+        const value = Number(threshold);
+
+        if (!Number.isInteger(value) || value < 0) {
+            addToast('Threshold must be a non-negative whole number', 'error');
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/medicines/${medId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ low_stock_threshold: value })
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                addToast(data.error || 'Failed to update threshold', 'error');
+                return;
+            }
+
+            addToast('Low-stock threshold updated', 'success');
+            fetchInventory();
+        } catch (err) {
+            addToast('Failed to update threshold', 'error');
+        }
     };
 
     const openAddBatchModal = (medId) => {
@@ -657,18 +686,21 @@ function InventoryPanel({ staff }) {
     };
 
     const groupedMedicines = medicines.reduce((acc, med) => {
-        if (!acc[med.name]) {
-            acc[med.name] = {
+        const key = String(med.id);
+
+        if (!acc[key]) {
+            acc[key] = {
                 name: med.name,
                 category: med.category,
                 id: med.id,
                 totalStock: 0,
-                low_stock_threshold: med.low_stock_threshold || 10,
+                low_stock_threshold: Number(med.low_stock_threshold ?? 10),
                 batches: []
             };
         }
-        acc[med.name].totalStock += med.stock_quantity;
-        acc[med.name].batches.push(med);
+
+        acc[key].totalStock += Number(med.stock_quantity || 0);
+        acc[key].batches.push(med);
         return acc;
     }, {});
 
@@ -713,11 +745,11 @@ function InventoryPanel({ staff }) {
                                             <td onClick={() => setExpandedMed(expandedMed === medGroup.name ? null : medGroup.name)}>
                                                 <div style={{ fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                     {expandedMed === medGroup.name ? '▼' : '▶'} {medGroup.name}
-                                                    <span style={{ 
-                                                        fontSize: '12px', 
-                                                        background: '#1e293b', 
-                                                        padding: '2px 8px', 
-                                                        borderRadius: '6px', 
+                                                    <span style={{
+                                                        fontSize: '12px',
+                                                        background: '#1e293b',
+                                                        padding: '2px 8px',
+                                                        borderRadius: '6px',
                                                         fontWeight: '600',
                                                         color: 'var(--text-secondary)',
                                                         marginLeft: '4px'
@@ -728,12 +760,17 @@ function InventoryPanel({ staff }) {
                                             </td>
                                             <td><span className="badge" style={{ background: 'rgba(255,255,255,0.05)', fontSize: '0.7rem' }}>{medGroup.category}</span></td>
                                             <td className="text-right">
-                                                <span style={{ 
-                                                    fontWeight: '700', 
-                                                    color: medGroup.totalStock <= medGroup.low_stock_threshold ? 'var(--accent-red)' : 'var(--accent-emerald)' 
-                                                }}>
-                                                    {medGroup.totalStock}
-                                                </span>
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem' }}>
+                                                    <span style={{
+                                                        fontWeight: '700',
+                                                        color: medGroup.totalStock <= medGroup.low_stock_threshold ? 'var(--accent-red)' : 'var(--accent-emerald)'
+                                                    }}>
+                                                        {medGroup.totalStock}
+                                                    </span>
+                                                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                                                        Threshold: {medGroup.low_stock_threshold}
+                                                    </span>
+                                                </div>
                                             </td>
                                             <td className="text-right">
                                                 <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
@@ -757,6 +794,29 @@ function InventoryPanel({ staff }) {
                                                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                                                                     <div>MFD: {batch.mfd_date || 'N/A'}</div>
                                                                     <div>EXP: {batch.expiry_date || 'N/A'}</div>
+                                                                    <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                                        <label style={{ fontSize: '0.75rem' }}>Low-stock threshold:</label>
+                                                                        <input
+                                                                            type="number"
+                                                                            min="0"
+                                                                            step="1"
+                                                                            defaultValue={medGroup.low_stock_threshold}
+                                                                            className="form-input"
+                                                                            style={{ width: '90px', padding: '0.3rem 0.5rem', fontSize: '0.75rem' }}
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                            onBlur={(e) => {
+                                                                                const value = Number(e.target.value);
+                                                                                if (value !== medGroup.low_stock_threshold) {
+                                                                                    handleUpdateThreshold(medGroup.id, value);
+                                                                                }
+                                                                            }}
+                                                                            onKeyDown={(e) => {
+                                                                                if (e.key === 'Enter') {
+                                                                                    e.currentTarget.blur();
+                                                                                }
+                                                                            }}
+                                                                        />
+                                                                    </div>
                                                                     <div style={{ marginTop: '0.3rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.3rem' }}>
                                                                         MRP: ₹{batch.mrp?.toFixed(2) || '0.00'}{' | '}
                                                                         Discount: {batch.batch_discount || 0}%
@@ -786,8 +846,8 @@ function InventoryPanel({ staff }) {
                     background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center',
                     justifyContent: 'center', zIndex: 2000, padding: '1rem'
                 }}>
-                    <div className="glass-card" style={{ 
-                        maxWidth: '650px', width: '100%', 
+                    <div className="glass-card" style={{
+                        maxWidth: '650px', width: '100%',
                         maxHeight: '90vh', overflowY: 'auto', padding: '2rem'
                     }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
@@ -960,7 +1020,7 @@ function OrderLogsPanel() {
             const results = await Promise.all(logsPromises);
             const allLogs = [];
             results.forEach(r => { if (r.logs) r.logs.forEach(log => allLogs.push({ ...log, order_id: r.order?.order_id })); });
-            
+
             let filteredLogs = allLogs;
             if (logFilter) {
                 const actionKeywords = {

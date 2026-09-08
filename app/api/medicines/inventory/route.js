@@ -20,16 +20,28 @@ export async function GET(request) {
                 m.id, m.name, m.category, m.low_stock_threshold, m.discount_percent,
                 b.id as batch_id, b.batch_no, b.stock as stock_quantity, b.expiry_date, b.mfd_date, b.mrp, b.discount_percent as batch_discount,
                 (SELECT COUNT(*) FROM order_items WHERE batch_id = b.id) > 0 as is_used,
-                (SELECT COUNT(*) FROM batches WHERE medicine_id = m.id) as batch_count,
-                (SELECT SUM(stock) FROM batches WHERE medicine_id = m.id) as total_stock
+                (SELECT COUNT(*) FROM batches WHERE medicine_id = m.id AND is_active = TRUE) as batch_count,
+                (SELECT SUM(stock) FROM batches WHERE medicine_id = m.id AND is_active = TRUE) as total_stock
             FROM medicines m
-            LEFT JOIN batches b ON m.id = b.medicine_id
-            WHERE 1=1
+            LEFT JOIN batches b
+                ON m.id = b.medicine_id
+                AND b.is_active = TRUE
+            WHERE m.is_active = TRUE
         `;
         const params = [];
 
         if (lowStockOnly) {
-            sql += ' AND m.stock_quantity <= m.low_stock_threshold';
+            sql += `
+                AND COALESCE(
+                    (
+                        SELECT SUM(b2.stock)
+                        FROM batches b2
+                        WHERE b2.medicine_id = m.id
+                          AND b2.is_active = TRUE
+                    ),
+                    0
+                ) <= m.low_stock_threshold
+            `;
         }
 
         if (category) {

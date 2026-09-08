@@ -111,20 +111,34 @@ export async function DELETE(request, { params }) {
         }
 
         db.transaction(() => {
-            // Ensure foreign keys are active
-            db.pragma('foreign_keys = ON');
+            // Keep the batch and its history for auditability.
+            // Deactivation removes it from active inventory without
+            // destroying order or inventory-log history.
 
-            // 1. Delete order items for this batch
-            db.prepare('DELETE FROM order_items WHERE batch_id = ?').run(id);
+            const previousStock = Number(batch.stock || 0);
 
-            // 2. Delete inventory logs for this batch
-            db.prepare('DELETE FROM inventory_logs WHERE batch_id = ?').run(id);
+            db.prepare(`
+                UPDATE batches
+                SET stock = 0,
+                    is_active = FALSE
+                WHERE id = ?
+            `).run(id);
 
-            // 3. Delete the batch
-            db.prepare('DELETE FROM batches WHERE id = ?').run(id);
+            db.prepare(`
+                INSERT INTO inventory_logs
+                    (batch_id, change_type, quantity_added, reason)
+                VALUES (?, 'DELETE_BATCH', ?, ?)
+            `).run(
+                id,
+                -previousStock,
+                `Batch ${batch.batch_no} deactivated`
+            );
         })();
 
-        return NextResponse.json({ success: true, message: `Batch ${batch.batch_no} permanently deleted.` });
+        return NextResponse.json({
+            success: true,
+            message: `Batch ${batch.batch_no} deactivated successfully. Inventory history preserved.`
+        });
     } catch (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }

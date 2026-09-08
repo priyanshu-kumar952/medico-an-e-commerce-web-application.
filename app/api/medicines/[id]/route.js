@@ -106,3 +106,74 @@ export async function PUT(request, { params }) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+
+
+export async function PATCH(request, { params }) {
+    try {
+        const session = await getSession();
+
+        if (!session || (session.role !== 'admin' && session.role !== 'staff')) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const { id } = await params;
+        const body = await request.json();
+
+        if (
+            body.low_stock_threshold === undefined ||
+            !Number.isInteger(Number(body.low_stock_threshold)) ||
+            Number(body.low_stock_threshold) < 0
+        ) {
+            return NextResponse.json(
+                { error: 'A valid non-negative low_stock_threshold is required' },
+                { status: 400 }
+            );
+        }
+
+        const db = getDb();
+
+        const medicine = db.prepare(
+            'SELECT id, name FROM medicines WHERE id = ?'
+        ).get(id);
+
+        if (!medicine) {
+            return NextResponse.json(
+                { error: 'Medicine not found' },
+                { status: 404 }
+            );
+        }
+
+        const threshold = Number(body.low_stock_threshold);
+
+        db.prepare(`
+            UPDATE medicines
+            SET low_stock_threshold = ?
+            WHERE id = ?
+        `).run(threshold, id);
+
+        const updated = db.prepare(`
+            SELECT
+                m.*,
+                COALESCE(SUM(b.stock), 0) AS total_stock
+            FROM medicines m
+            LEFT JOIN batches b
+                ON m.id = b.medicine_id
+                AND b.is_active = TRUE
+            WHERE m.id = ?
+            GROUP BY m.id
+        `).get(id);
+
+        return NextResponse.json({
+            success: true,
+            medicine: {
+                ...updated,
+                stock_quantity: updated.total_stock
+            }
+        });
+    } catch (error) {
+        return NextResponse.json(
+            { error: error.message },
+            { status: 500 }
+        );
+    }
+}
