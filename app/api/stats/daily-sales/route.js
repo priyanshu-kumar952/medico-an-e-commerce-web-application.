@@ -52,15 +52,13 @@ export async function GET(request) {
                 GROUP BY order_id
             ) oi_sub ON o.order_id = oi_sub.order_id
             LEFT JOIN bills b ON o.order_id = b.order_id
-            WHERE o.status = 'Completed'
+            WHERE o.status = 'COMPLETED'
             ${dateFilter}
             GROUP BY DATE(o.created_at)
             ORDER BY date ASC
         `).all(...params);
 
         return NextResponse.json({ data: sales });
-
-        return NextResponse.json({ data });
     } catch (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }

@@ -23,6 +23,8 @@ export async function GET(request) {
       params.push(startDate, endDate);
     } else if (dateRange === 'day') {
       dateFilter = " AND DATE(o.created_at) = DATE('now', 'localtime')";
+    } else if (dateRange === 'yesterday') {
+      dateFilter = " AND DATE(o.created_at) = DATE('now', 'localtime', '-1 day')";
     } else if (dateRange === 'week') {
       dateFilter = " AND DATE(o.created_at) >= DATE('now', 'localtime', '-7 days')";
     } else if (dateRange === 'month') {
@@ -36,7 +38,7 @@ export async function GET(request) {
         SUM(oi.line_total) as total_revenue
       FROM order_items oi
       JOIN orders o ON oi.order_id = o.order_id
-      WHERE o.status IN ('Completed', 'Packed', 'In Progress')${dateFilter}
+      WHERE o.status = 'COMPLETED'${dateFilter}
       GROUP BY oi.medicine_name
       ORDER BY total_quantity DESC
       LIMIT 20
