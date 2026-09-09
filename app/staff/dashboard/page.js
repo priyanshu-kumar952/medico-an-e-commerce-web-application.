@@ -497,7 +497,7 @@ function InventoryPanel({ staff }) {
     const fetchInventory = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/medicines/inventory?q=${search}&category=${category}`);
+            const res = await fetch(`/api/medicines/inventory?q=${encodeURIComponent(search)}&category=${encodeURIComponent(category)}`, { cache: 'no-store' });
             const data = await res.json();
             setMedicines(data.medicines || []);
         } catch (err) {
@@ -595,7 +595,9 @@ function InventoryPanel({ staff }) {
             const res = await fetch(`/api/medicines/${medId}`, { method: 'DELETE' });
             if (res.ok) {
                 addToast('Medicine and all associated data deleted', 'success');
-                fetchInventory();
+                setExpandedMed(null);
+                setMedicines(prev => prev.filter(med => Number(med.id) !== Number(medId)));
+                await fetchInventory();
             } else {
                 const data = await res.json();
                 addToast(data.error || 'Delete failed', 'error');
@@ -740,11 +742,11 @@ function InventoryPanel({ staff }) {
                                 <tr><td colSpan="4" style={{ textAlign: 'center', padding: '2rem' }}>No items found</td></tr>
                             ) : (
                                 medicineList.map(medGroup => (
-                                    <React.Fragment key={medGroup.name}>
-                                        <tr style={{ cursor: 'pointer', borderLeft: expandedMed === medGroup.name ? '4px solid var(--accent-emerald)' : 'none' }}>
-                                            <td onClick={() => setExpandedMed(expandedMed === medGroup.name ? null : medGroup.name)}>
+                                    <React.Fragment key={medGroup.id}>
+                                        <tr style={{ cursor: 'pointer', borderLeft: expandedMed === medGroup.id ? '4px solid var(--accent-emerald)' : 'none' }}>
+                                            <td onClick={() => setExpandedMed(expandedMed === medGroup.id ? null : medGroup.id)}>
                                                 <div style={{ fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                    {expandedMed === medGroup.name ? '▼' : '▶'} {medGroup.name}
+                                                    {expandedMed === medGroup.id ? '▼' : '▶'} {medGroup.name}
                                                     <span style={{
                                                         fontSize: '12px',
                                                         background: '#1e293b',
@@ -1003,65 +1005,119 @@ function InventoryPanel({ staff }) {
     );
 }
 
-function OrderLogsPanel() {
+function OrderLogsPanel({ dateRange = 'all', customDateRange = null }) {
     const [logs, setLogs] = useState([]);
     const [logFilter, setLogFilter] = useState('');
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => { fetchLogs(); }, [logFilter]);
+    useEffect(() => {
+        fetchLogs();
+    }, [logFilter, dateRange, customDateRange]);
 
     const fetchLogs = async () => {
         setLoading(true);
-        try {
-            const res = await fetch(`/api/orders?status=${logFilter}&sort=newest`);
-            const data = await res.json();
-            const allOrders = data.orders || [];
-            const logsPromises = allOrders.slice(0, 50).map(o => fetch(`/api/orders/${o.order_id}`).then(r => r.json()));
-            const results = await Promise.all(logsPromises);
-            const allLogs = [];
-            results.forEach(r => { if (r.logs) r.logs.forEach(log => allLogs.push({ ...log, order_id: r.order?.order_id })); });
 
-            let filteredLogs = allLogs;
+        try {
+            const params = new URLSearchParams();
+            params.set('dateRange', dateRange || 'all');
+
             if (logFilter) {
-                const actionKeywords = {
-                    'PLACED': ['created', 'received'],
-                    'PACKED': ['packed', '"Packed"'],
-                    'COMPLETED': ['completed', '"Completed"'],
-                    'CANCELLED': ['cancelled'],
-                };
-                const keywords = actionKeywords[logFilter] || [];
-                filteredLogs = filteredLogs.filter(log => {
-                    const action = (log.action || '').toLowerCase();
-                    return keywords.some(kw => action.includes(kw.toLowerCase()));
-                });
+                params.set('status', logFilter);
             }
 
-            filteredLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-            setLogs(filteredLogs);
-        } catch (err) { console.error('Failed to fetch logs', err); }
-        finally { setLoading(false); }
+            if (
+                dateRange === 'custom' &&
+                customDateRange?.start &&
+                customDateRange?.end
+            ) {
+                params.set('startDate', customDateRange.start);
+                params.set('endDate', customDateRange.end);
+            }
+
+            const res = await fetch(`/api/order-logs?${params.toString()}`, {
+                cache: 'no-store'
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || 'Failed to fetch order logs');
+            }
+
+            setLogs(data.logs || []);
+        } catch (err) {
+            console.error('Failed to fetch logs:', err);
+            setLogs([]);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
         <div>
             <div className="filters-bar" style={{ marginBottom: '1.5rem' }}>
                 {['', 'PLACED', 'PACKED', 'COMPLETED', 'CANCELLED'].map(status => (
-                    <button key={status} className={`filter-btn ${logFilter === status ? 'active' : ''}`} onClick={() => setLogFilter(status)}>
+                    <button
+                        key={status || 'all'}
+                        className={`filter-btn ${logFilter === status ? 'active' : ''}`}
+                        onClick={() => setLogFilter(status)}
+                    >
                         {status ? status.replace('_', ' ') : 'All'}
                     </button>
                 ))}
             </div>
+
             <div className="glass-card">
-                <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text-secondary)' }}>Activity Log</h3>
+                <h3
+                    style={{
+                        fontSize: '1rem',
+                        marginBottom: '1rem',
+                        color: 'var(--text-secondary)'
+                    }}
+                >
+                    Activity Log
+                </h3>
+
                 {loading ? (
-                    <div style={{ textAlign: 'center', padding: '2rem' }}><div className="spinner" style={{ width: '24px', height: '24px', margin: '0 auto' }}></div></div>
+                    <div style={{ textAlign: 'center', padding: '2rem' }}>
+                        <div
+                            className="spinner"
+                            style={{
+                                width: '24px',
+                                height: '24px',
+                                margin: '0 auto'
+                            }}
+                        ></div>
+                    </div>
                 ) : logs.length === 0 ? (
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No logs found</p>
+                    <p
+                        style={{
+                            color: 'var(--text-muted)',
+                            fontSize: '0.85rem'
+                        }}
+                    >
+                        No logs found for the selected timeframe.
+                    </p>
                 ) : (
-                    logs.map((log, i) => (
-                        <div key={i} className="log-entry">
-                            <div className="log-action"><span style={{ color: 'var(--accent-blue)', fontFamily: 'var(--font-heading)' }}>{log.order_id}</span>{' — '}{log.action}</div>
-                            <div className="log-meta">By: {log.performed_by} • {new Date(log.timestamp).toLocaleString('en-IN')}</div>
+                    logs.map(log => (
+                        <div key={log.id} className="log-entry">
+                            <div className="log-action">
+                                <span
+                                    style={{
+                                        color: 'var(--accent-blue)',
+                                        fontFamily: 'var(--font-heading)'
+                                    }}
+                                >
+                                    {log.order_id}
+                                </span>
+                                {' — '}
+                                {log.action}
+                            </div>
+
+                            <div className="log-meta">
+                                By: {log.performed_by || 'system'} •{' '}
+                                {new Date(log.timestamp).toLocaleString('en-IN')}
+                            </div>
                         </div>
                     ))
                 )}

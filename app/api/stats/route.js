@@ -29,7 +29,7 @@ export async function GET(request) {
     } else if (dateRange === 'yesterday') {
       dateFilter = " AND DATE(created_at) = DATE('now', 'localtime', '-1 day')";
     } else if (dateRange === 'week') {
-      dateFilter = " AND DATE(created_at) >= DATE('now', 'localtime', '-7 days')";
+      dateFilter = " AND DATE(created_at) >= DATE('now', 'localtime', '-6 days')";
     } else if (dateRange === 'month') {
       dateFilter = " AND DATE(created_at) >= DATE('now', 'localtime', 'start of month')";
     }
@@ -77,7 +77,7 @@ export async function GET(request) {
     } else if (dateRange === 'yesterday') {
       revenueDateFilter = " AND DATE(o.completed_at) = DATE('now', 'localtime', '-1 day')";
     } else if (dateRange === 'week') {
-      revenueDateFilter = " AND DATE(o.completed_at) >= DATE('now', 'localtime', '-7 days')";
+      revenueDateFilter = " AND DATE(o.completed_at) >= DATE('now', 'localtime', '-6 days')";
     } else if (dateRange === 'month') {
       revenueDateFilter = " AND DATE(o.completed_at) >= DATE('now', 'localtime', 'start of month')";
     }
@@ -103,21 +103,25 @@ export async function GET(request) {
     `;
     const unitsParams = [];
     if (startDate && endDate) {
-      unitsSql += ` AND DATE(o.created_at) BETWEEN ? AND ?`;
+      unitsSql += ` AND DATE(o.completed_at) BETWEEN ? AND ?`;
       unitsParams.push(startDate, endDate);
     } else if (dateRange === 'day') {
-      unitsSql += " AND DATE(o.created_at) = DATE('now', 'localtime')";
+      unitsSql += " AND DATE(o.completed_at) = DATE('now', 'localtime')";
     } else if (dateRange === 'yesterday') {
-      unitsSql += " AND DATE(o.created_at) = DATE('now', 'localtime', '-1 day')";
+      unitsSql += " AND DATE(o.completed_at) = DATE('now', 'localtime', '-1 day')";
     } else if (dateRange === 'week') {
-      unitsSql += " AND DATE(o.created_at) >= DATE('now', 'localtime', '-7 days')";
+      unitsSql += " AND DATE(o.completed_at) >= DATE('now', 'localtime', '-6 days')";
     } else if (dateRange === 'month') {
-      unitsSql += " AND DATE(o.created_at) >= DATE('now', 'localtime', 'start of month')";
+      unitsSql += " AND DATE(o.completed_at) >= DATE('now', 'localtime', 'start of month')";
     }
     const totalUnits = db.prepare(unitsSql).get(...unitsParams).units;
 
     // AOV calculation (Revenue / Completed Orders in timeframe)
-    const completedOrdersInTimeframe = db.prepare(`SELECT COUNT(*) as count FROM orders WHERE status = 'COMPLETED'${dateFilter}`).get(...dateParams).count;
+    const completedOrdersInTimeframe = db.prepare(`
+      SELECT COUNT(*) as count
+      FROM orders o
+      WHERE o.status = 'COMPLETED'${revenueDateFilter}
+    `).get(...revenueDateParams).count;
     const aov = completedOrdersInTimeframe > 0 ? filteredRevenue / completedOrdersInTimeframe : 0;
 
     const totalRevenue = db.prepare(`

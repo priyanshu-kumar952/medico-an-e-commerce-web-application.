@@ -20,7 +20,7 @@ export default function ExpiryAlerts({ onClose }) {
         setLoading(true);
         try {
             // Fetching all inventory to check expiry
-            const res = await fetch('/api/medicines/inventory');
+            const res = await fetch('/api/medicines/inventory', { cache: 'no-store' });
             const data = await res.json();
             const meds = data.medicines || [];
             classifyMedicines(meds);
@@ -77,9 +77,10 @@ export default function ExpiryAlerts({ onClose }) {
                 });
             }
 
-            stockByMedicine.get(med.id).totalStock += Number(
-                med.stock_quantity || 0
-            );
+            const stock = Number(med.stock_quantity || 0);
+            if (stock > 0) {
+                stockByMedicine.get(med.id).totalStock += stock;
+            }
         });
 
         stockByMedicine.forEach(med => {

@@ -742,7 +742,7 @@ function AdminDashboardContent() {
                 )}
 
                 {/* ORDER LOGS TAB */}
-                {activeTab === 'logs' && <AdminOrderLogsPanel dateRange={dateRange} />}
+                {activeTab === 'logs' && <AdminOrderLogsPanel dateRange={dateRange} customDateRange={customDateRange} />}
             </div>
         </div>
     );
@@ -1276,66 +1276,49 @@ function InventoryPanel() {
     );
 }
 
-function AdminOrderLogsPanel({ dateRange, customDateRange }) {
+function AdminOrderLogsPanel({ dateRange = 'all', customDateRange = null }) {
     const [logs, setLogs] = useState([]);
     const [logFilter, setLogFilter] = useState('');
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => { fetchLogs(); }, [logFilter, dateRange, customDateRange]);
+    useEffect(() => {
+        fetchLogs();
+    }, [logFilter, dateRange, customDateRange]);
 
     const fetchLogs = async () => {
         setLoading(true);
+
         try {
-            let url = `/api/orders?sort=newest&dateRange=${dateRange}`;
-            if (customDateRange) {
-                url = `/api/orders?sort=newest&startDate=${customDateRange.startDate}&endDate=${customDateRange.endDate}`;
+            const params = new URLSearchParams();
+            params.set('dateRange', dateRange || 'all');
+
+            if (logFilter) {
+                params.set('status', logFilter);
             }
 
-            const res = await fetch(url);
-            const data = await res.json();
-            const allOrders = data.orders || [];
+            if (
+                dateRange === 'custom' &&
+                customDateRange?.start &&
+                customDateRange?.end
+            ) {
+                params.set('startDate', customDateRange.start);
+                params.set('endDate', customDateRange.end);
+            }
 
-            // To get logs, we need detailed order info. We limit to recent 50 orders to avoid flooding.
-            const logsPromises = allOrders.slice(0, 50).map(o =>
-                fetch(`/api/orders/${o.id}`).then(r => r.json())
-            );
-
-            const results = await Promise.all(logsPromises);
-            const allLogs = [];
-            results.forEach(r => {
-                if (r.logs) {
-                    r.logs.forEach(log => {
-                        const action = log.action.toLowerCase();
-                        let include = false;
-
-                        if (!logFilter) {
-                            include = true;
-                        } else if (logFilter === 'PLACED' && (action.includes('created') || action.includes('received'))) {
-                            include = true;
-                        } else if (logFilter === 'PACKED' && action.includes('packed')) {
-                            include = true;
-                        } else if (logFilter === 'COMPLETED' && action.includes('completed')) {
-                            include = true;
-                        } else if (logFilter === 'CANCELLED' && (action.includes('cancelled') || action.includes('cancel'))) {
-                            include = true;
-                        }
-
-                        if (include) {
-                            allLogs.push({
-                                ...log,
-                                order_id: r.order?.id,
-                                status: r.order?.status,
-                                cancelled_by: r.order?.cancelled_by
-                            });
-                        }
-                    });
-                }
+            const res = await fetch(`/api/order-logs?${params.toString()}`, {
+                cache: 'no-store'
             });
 
-            allLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-            setLogs(allLogs);
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || 'Failed to fetch order logs');
+            }
+
+            setLogs(data.logs || []);
         } catch (err) {
-            console.error('Failed to fetch logs', err);
+            console.error('Failed to fetch logs:', err);
+            setLogs([]);
         } finally {
             setLoading(false);
         }
@@ -1344,54 +1327,74 @@ function AdminOrderLogsPanel({ dateRange, customDateRange }) {
     return (
         <div>
             <div className="filters-bar" style={{ marginBottom: '1.5rem' }}>
-                {['', 'PLACED', 'PACKED', 'COMPLETED', 'CANCELLED'].map(st => (
-                    <button key={st} className={`filter-btn ${logFilter === st ? 'active' : ''}`} onClick={() => setLogFilter(st)}>
-                        {st || 'All Statuses'}
+                {['', 'PLACED', 'PACKED', 'COMPLETED', 'CANCELLED'].map(status => (
+                    <button
+                        key={status || 'all'}
+                        className={`filter-btn ${logFilter === status ? 'active' : ''}`}
+                        onClick={() => setLogFilter(status)}
+                    >
+                        {status ? status.replace('_', ' ') : 'All'}
                     </button>
                 ))}
             </div>
+
             <div className="glass-card">
-                <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text-secondary)' }}>Activity History ({dateRange})</h3>
+                <h3
+                    style={{
+                        fontSize: '1rem',
+                        marginBottom: '1rem',
+                        color: 'var(--text-secondary)'
+                    }}
+                >
+                    Activity Log
+                </h3>
+
                 {loading ? (
-                    <div style={{ textAlign: 'center', padding: '2rem' }}><div className="spinner" style={{ width: '24px', height: '24px', margin: '0 auto' }}></div></div>
-                ) : logs.length === 0 ? (
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No activity logs found for this period.</p>
-                ) : (
-                    <div className="logs-container">
-                        {logs.map((log, i) => (
-                            <div key={i} className="log-entry" style={{
-                                padding: '0.75rem 0',
-                                borderBottom: '1px solid var(--border-color)',
-                                opacity: log.action.includes('cancelled') ? 0.9 : 1
-                            }}>
-                                <div className="log-action">
-                                    <span style={{ color: 'var(--accent-blue)', fontWeight: '600' }}>{log.order_id}</span>
-                                    {' — '}
-                                    <span style={{ color: log.action.includes('cancelled') ? 'var(--accent-red)' : 'var(--text-primary)' }}>
-                                        {log.action}
-                                    </span>
-                                </div>
-                                <div className="log-meta" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                                    Performed by: <strong style={{ color: 'var(--text-secondary)' }}>{log.performed_by}</strong>
-                                    {log.action.includes('cancelled') && log.cancelled_by && (
-                                        <span style={{ marginLeft: '0.5rem', color: 'var(--accent-red)', fontSize: '0.7rem' }}>
-                                            (Type: {log.cancelled_by})
-                                        </span>
-                                    )}
-                                    <span style={{ margin: '0 0.5rem' }}>•</span>
-                                    {new Date(log.timestamp).toLocaleString('en-IN')}
-                                </div>
-                            </div>
-                        ))}
+                    <div style={{ textAlign: 'center', padding: '2rem' }}>
+                        <div
+                            className="spinner"
+                            style={{
+                                width: '24px',
+                                height: '24px',
+                                margin: '0 auto'
+                            }}
+                        ></div>
                     </div>
+                ) : logs.length === 0 ? (
+                    <p
+                        style={{
+                            color: 'var(--text-muted)',
+                            fontSize: '0.85rem'
+                        }}
+                    >
+                        No logs found for the selected timeframe.
+                    </p>
+                ) : (
+                    logs.map(log => (
+                        <div key={log.id} className="log-entry">
+                            <div className="log-action">
+                                <span
+                                    style={{
+                                        color: 'var(--accent-blue)',
+                                        fontFamily: 'var(--font-heading)'
+                                    }}
+                                >
+                                    {log.order_id}
+                                </span>
+                                {' — '}
+                                {log.action}
+                            </div>
+
+                            <div className="log-meta">
+                                By: {log.performed_by || 'system'} •{' '}
+                                {new Date(log.timestamp).toLocaleString('en-IN')}
+                            </div>
+                        </div>
+                    ))
                 )}
             </div>
         </div>
     );
-}
-
-export default function AdminDashboardPage() {
-    return <ToastProvider><AdminDashboardContent /></ToastProvider>;
 }
 
 function InventoryLogsPanel() {
@@ -1472,4 +1475,8 @@ function InventoryLogsPanel() {
             )}
         </div>
     );
+}
+
+export default function AdminDashboardPage() {
+    return <ToastProvider><AdminDashboardContent /></ToastProvider>;
 }
