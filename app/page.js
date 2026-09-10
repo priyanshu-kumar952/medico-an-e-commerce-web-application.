@@ -118,40 +118,55 @@ function HomePage() {
       return addToast('Please enter a valid 10-digit mobile number', 'error');
     }
 
-    if (cart.length === 0) return addToast('Please add medicines to cart', 'error');
+    if (cart.length === 0) {
+      return addToast('Please add medicines to cart', 'error');
+    }
 
-    // --- OTP VERIFICATION TEMPORARILY DISABLED AS REQUESTED ---
-    /*
     if (!isPhoneVerified) {
       setLoading(true);
+
       try {
         if (!window.recaptchaVerifier) {
-          window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-            'size': 'invisible',
-            'callback': (response) => {
-              // reCAPTCHA solved, allow signInWithPhoneNumber.
+          window.recaptchaVerifier = new RecaptchaVerifier(
+            auth,
+            'recaptcha-container',
+            {
+              size: 'invisible',
+              callback: () => {}
             }
-          });
+          );
         }
-        
+
         const appVerifier = window.recaptchaVerifier;
-        const result = await signInWithPhoneNumber(auth, `+91${phoneTrimmed}`, appVerifier);
+
+        const result = await signInWithPhoneNumber(
+          auth,
+          `+91${phoneTrimmed}`,
+          appVerifier
+        );
+
         setConfirmationResult(result);
+        setOtpCode('');
         setShowOtpModal(true);
         addToast('Verification code sent!', 'success');
       } catch (err) {
         console.error('Firebase Auth Error:', err);
+
         if (window.recaptchaVerifier) {
-           window.recaptchaVerifier.clear();
-           window.recaptchaVerifier = null;
+          window.recaptchaVerifier.clear();
+          window.recaptchaVerifier = null;
         }
-        addToast('Failed to send verification SMS. Please check your number.', 'error');
+
+        addToast(
+          'Failed to send verification SMS. Please check your number.',
+          'error'
+        );
       } finally {
         setLoading(false);
       }
+
       return;
     }
-    */
 
     submitFinalOrder();
   };
