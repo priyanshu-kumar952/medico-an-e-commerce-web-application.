@@ -34,7 +34,9 @@ export async function GET(request) {
       dateFilter = " AND DATE(created_at) >= DATE('now', 'localtime', 'start of month')";
     }
 
-    const placed = db.prepare(`SELECT COUNT(*) as count FROM orders WHERE status = 'PLACED'${dateFilter}`).get(...dateParams).count;
+    // Placed = all orders created in the selected timeframe,
+    // regardless of their current status.
+    const placed = db.prepare(`SELECT COUNT(*) as count FROM orders WHERE 1=1${dateFilter}`).get(...dateParams).count;
     const packed = db.prepare(`SELECT COUNT(*) as count FROM orders WHERE status = 'PACKED'${dateFilter}`).get(...dateParams).count;
     const completed = db.prepare(`SELECT COUNT(*) as count FROM orders WHERE status = 'COMPLETED'${dateFilter}`).get(...dateParams).count;
     const cancelled = db.prepare(`SELECT COUNT(*) as count FROM orders WHERE status = 'CANCELLED'${dateFilter}`).get(...dateParams).count;
