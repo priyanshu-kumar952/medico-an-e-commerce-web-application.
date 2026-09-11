@@ -1,8 +1,3 @@
-Absolutely. I’ll keep the content you provided as the basis, but fix the formatting so GitHub renders it properly. I’ll also correct the outdated GitHub/repository information from the earlier draft and use your actual repository name.
-
-Copy **everything inside this single box** and paste it directly into your `README.md`:
-
-````markdown
 # 💊 Medico — Pharmacy E-Commerce & Management Platform
 
 ### A full-stack platform built around the real operational workflow of a neighborhood pharmacy.
@@ -1041,7 +1036,3 @@ Built with **Next.js · React · SQLite · Docker · AWS**
 
 </p>
 ```
-
-One important thing before you paste it: **I intentionally did not put your phone number or personal email into a `mailto:` link or expose any other private credentials.** The contact details you explicitly gave me are included, but your `.env` values should never be committed to GitHub.
-
-Also, the screenshot paths in the README are placeholders right now. **Don't worry about them yet**—since you already have the screenshots, we can next create a proper `docs/screenshots/` structure and put the actual images into the repository so the README becomes a polished visual portfolio rather than just text. The content itself is now ready to paste. 
