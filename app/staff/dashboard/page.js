@@ -187,16 +187,67 @@ function DashboardContent() {
     };
 
     const getDateRangeLabel = () => {
+        const formatDate = (date) => {
+            if (!date) return '';
+            const d = new Date(`${date}T00:00:00`);
+            return d.toLocaleDateString('en-IN', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
+            });
+        };
+
+        const today = new Date();
+        const todayText = today.toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+        });
+
         switch (dateRange) {
-            case 'day': return 'Today';
-            case 'yesterday': return 'Yesterday';
-            case 'week': return 'This Week';
-            case 'month': return 'This Month';
-            case 'all': return 'All Time';
+            case 'day':
+                return `Today • ${todayText}`;
+
+            case 'yesterday': {
+                const d = new Date(today);
+                d.setDate(d.getDate() - 1);
+                return `Yesterday • ${d.toLocaleDateString('en-IN', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric'
+                })}`;
+            }
+
+            case 'week': {
+                const start = new Date(today);
+                start.setDate(start.getDate() - 6);
+                return `This Week • ${start.toLocaleDateString('en-IN', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric'
+                })} – ${todayText}`;
+            }
+
+            case 'month': {
+                const start = new Date(today.getFullYear(), today.getMonth(), 1);
+                return `This Month • ${start.toLocaleDateString('en-IN', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric'
+                })} – ${todayText}`;
+            }
+
+            case 'all':
+                return 'All Time';
+
             case 'custom':
-                if (customDateRange) return `${customDateRange.startDate} to ${customDateRange.endDate}`;
+                if (customDateRange) {
+                    return `${formatDate(customDateRange.startDate)} – ${formatDate(customDateRange.endDate)}`;
+                }
                 return 'Custom Range';
-            default: return 'Timeframe';
+
+            default:
+                return 'Timeframe';
         }
     };
 
