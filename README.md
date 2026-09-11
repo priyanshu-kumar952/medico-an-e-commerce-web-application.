@@ -1,1 +1,1047 @@
-💊 Medico Pharmacy E-Commerce & Management Platform A full-stack platform built around the real operational workflow of a neighborhood pharmacy — medicine ordering, batch-level inventory, billing, analytics, and audit logging, all in one system. Next.js React Live Demo → SQLite Docker AWS Deployed on AWS EC2 with Docker and automated CI/CD via GitHub Actions. Ordering, inventory, staff, owner, and analytics workflows are fully operational. Customer phone OTP and Google Maps integration are not yet active in production — see Current Limitations. Table of Contents Overview Why I Built This Features ScreenshotsSystem Architecture Authentication and Security Database Design Order and Billing Logic Analytics and Audit Logging Tech Stack Deployment Architecture CI/CD Pipeline Project Structure API Reference Testing and QA Getting Started Current Limitations Roadmap AI-Assisted Development What This Project Demonstrates Project Status Author and Contact Built For License OverviewLocal pharmacies typically run on in-store purchases, phone calls, and WhatsApp messages. Medico digitizes that workflow into a structured system, without losing the operational simplicity of a small pharmacy — built specifically for Mithila Medico in Gardanibagh, Patna, Bihar. The platform serves three distinct roles from a single codebase: Role Purpose Customer Staff Search medicines, place orders, track status, access order history Process orders, select fulfillment batches, manage stock, monitor alerts Owner / Admin Monitor operations, sales, inventory, analytics, and audit history Why I Built This This started as a way to test whether I could design and deliver a complete software system before approaching businesses as a freelancer. I picked Mithila Medico, a pharmacy I already knew, as a realworld case study.The initial scope was deliberately small: a customer places an order, staff packs it, the customer is notified, and the owner can see what's happening. As I used and tested it from each role's perspective, the requirements grew — and the project evolved to include: Batch-level inventory and expiry monitoring Stock validation and billing calculated at packing time Sales analytics and date-range reporting Order and inventory audit logs Role-based authorization Transactional order processing Automated CI/CD deployment What began as a small prototype became a considerably more complete pharmacy management system. Features Customer Experience Search medicines, add to cart, adjust quantities, validate available stockPlace orders for pickup, with an optional delivery address Order confirmation, live status tracking, and eligible-order cancellation Downloadable invoices and purchase history Order lifecycle: Placed → Packed → Completed (cancellable when the workflow permits) Staff Operations Order management View, search (by order ID, customer name, phone, or bill info), filter, and sort incoming orders Open individual orders, confirm pricing, select the exact inventory batch used for fulfillment, pack, and generate final billing Cancel orders when needed Inventory operations View medicines and stock levels, manage individual batches Add medicines/batches, update inventory, configure low-stock thresholds Alerts — low-stock medicines, expired medicines, and critical upcoming expiries surface directly on the staff dashboard.Owner and Admin Dashboard Order management — full order overview, status and date-range filtering, search, order history, and operational monitoring. Sales analytics — total revenue, completed order count, average order value, units sold, daily revenue trends, top-selling medicines, and daily performance breakdowns. Inventory management — medicine and batch management, stock and expiry monitoring, inventory history. Audit and logs — traceable history of inventory and order changes. Screenshots (Add screenshots to docs/screenshots/ and reference them below.) Customer — pharmacy landing page · medicine search & cart · order tracking · purchase history Staff — dashboard with order queue & filters · order processing & batch selection · low-stock/expiry alerts Owner — sales analytics dashboard · inventory & batch managementSystem Architecture Medico is a single Next.js application serving all three interfaces and the backend API. Customer   Staff   Owner └────────┼───────┘ ┌────────┴────────┐ │ Routes │ Business Logic │ Database │        │       │ │ Next.js Application │ │                 Frontend          API (better-sqlite3) SQLite Authentication and Security Authentication Password hashing with bcryptjs JWT-based sessions via jose , HS256 signing, token expiration HTTP-only session cookies Authorization — access is separated by role: Customer → customer functionality Staff    → order + inventory operations Owner    access → full operational + analytical Protected routes perform server-side authorization checks rather than relying on frontend visibility alone. Additional protections — input validation, server-side validation, rate limiting on sensitive operations, transactional database operations, foreign-key enforcement, and indexes on frequently queried data. Database Design better-sqlite3 . The key Medico uses SQLite via design decision is separating medicines from theirindividual inventory batches, so stock and expiry are tracked per batch rather than per medicine: Medicine ├── Batch A — quantity, MRP, discount, mfg date, expiry date ├── Batch B — quantity, MRP, expiry date └── Batch C — ... The schema also uses foreign keys, WAL mode, indexes, transactions, migrations, and seed data, with persistent storage in production. Order and Billing Logic Stock and order state have to stay consistent, so order processing runs through a controlled, transactional flow: Customer order → validate requested quantities → create order → staff selects actual batch → validate batch stock → calculate final price → update inventory → generate bill → record order historyThe final price is calculated at packing time, based on the actual batch selected for fulfillment — not at the time the order is placed. Analytics and Audit Logging Analytics — total and daily revenue, revenue trends, order counts by status (placed/packed/completed/cancelled), units sold, average order value, top-selling medicines, and daily sales performance across custom or predefined date ranges. Audit logs — separate records for order activity and inventory activity, giving visibility into how orders and stock changed over time. Tech Stack Category Technology Framework Frontend Next.js 16 React 19 Language JavaScriptCategory Database Database Driver Authentication Password Hashing Customer OTP Charts Icons Containerization Reverse Proxy Cloud Hosting Container Registry CI/CD Technology SQLite better-sqlite3 JWT ( jose ) bcryptjs Firebase Recharts Lucide React Docker Caddy AWS EC2 GitHub Container Registry GitHub Actions AWS Authentication Remote Deployment OS GitHub OIDC + IAM AWS Systems Manager LinuxDeployment Architecture Internet │ ▼ AWS EC2 Instance │ ▼ Caddy :80 (reverse proxy) │ ▼ Docker Container └── Medico (Next.js) :3000 │ ▼ SQLite Database │ ▼ Persistent Volume Caddy proxies incoming requests to the Next.js app running in Docker. The SQLite database lives on a persistent volume, so replacing the app container never wipes application data. CI/CD Pipeline Push → GitHub Repository → GitHub Actions ├── Install dependencies├── ESLint └── Next.js production build │ ▼ Docker Image Build → GitHub Container Registry │ ▼ AWS OIDC / IAM → AWS Systems Manager → EC2 Instance ├── Pull latest image ├── Replace application container └── Preserve persistent database volume │ ▼ Health Check → Deployed Docker The production app runs in a Docker container for a consistent, reproducible runtime, simplified and isolated deployments, easy container replacement, and database storage kept outside the app container. Project Structuremedico/ │ ├── app/ │   ├── about/ │   ├── admin/ │   │   └── dashboard/ │   ├── staff/ │   │   ├── dashboard/ │   │   ├── login/ │   │   └── orders/ │   ├── history/ │   ├── order-confirmation/ │   ├── track/ │   │ │   └── api/ │       │       │       │       │       │       │       │       │       │ ├── components/ ├── lib/ ├── public/ ├── scripts/ │ ├── Dockerfile ├── docker-compose.yml ├── next.config.mjs ├── auth/ ├── batches/ ├── health/ ├── inventory/ ├── medicines/ ├── order-logs/ ├── orders/ ├── otp/ └── stats/├── package.json ├── migrate_db.js └── README.md API Reference Implemented as Next.js Route Handlers. Endpoint Purpose /api/auth /api/medicines Login, session, and role-based auth /api/medicines/[id] /api/medicines/[id]/stock Medicine catalog CRUD Single medicine detail / update Stock level for a medicine /api/medicines/inventory /api/batches Combined medicine + inventory view Batch-level inventory managementEndpoint Purpose /api/inventory/logs /api/orders Inventory audit log /api/orders/[id] /api/orders/[id]/pack /api/order-logs /api/stats /api/stats/daily-sales /api/stats/medicines /api/otp/send / /api/otp/verify /api/health Order creation and listing Single order detail Batch selection, packing, and billing Order audit log General dashboard stats Daily sales breakdown Top-selling medicines Customer phone OTP Health check endpointTesting and QA Tested manually from all three roles, focused on real business workflows rather than isolated UI components: Core workflows — medicine search, cart, order placement, tracking, purchase history Staff operations — order processing, batch selection, inventory operations, low-stock/expiry alerts, filtering Dashboards & analytics — order/date filtering, sales analytics, statistics Auth, data & infra — authentication, authorization, database operations, Docker deployment, CI/CD deployment Getting Started The steps below follow standard Next.js + SQLite conventions based on the project structure. Adjust the repo URL, npm scripts, and env variable names to match your actual package.json and .env setup. PrerequisitesNode.js 18+ npm Local Development git clone https://github.com/priyanshukumar952/medico.git cd medico npm install node migrate_db.js   # initialize the SQLite schema npm run dev App runs at http://localhost:3000 . Environment Variables Create a .env.local file: JWT_SECRET=your-secret-key FIREBASE_API_KEY=your-firebase-key FIREBASE_AUTH_DOMAIN=your-firebase-domain FIREBASE_PROJECT_ID=your-firebase-projectid DATABASE_PATH=./data/medico.db Run with Docker docker-compose up --buildCurrent Limitations Customer Phone OTP — Firebase Phone Authentication is implemented, but production SMS verification requires Firebase billing configuration, so it's currently disabled. Google Maps — the pharmacy location integration isn't working as intended yet; the app currently uses publicly available location info for Mithila Medico instead. Roadmap [ ] Enable production phone OTP verification [ ] Fix and improve Google Maps integration [ ] HTTPS / domain-based production access [ ] Improve automated test coverage [ ] Add more advanced analytics [ ] Improve mobile experience [ ] Expand notification capabilities [ ] Additional pharmacy operational features [ ] Improve deployment observability AI-Assisted DevelopmentAI tools (ChatGPT, and Antigravity IDE's native agent) were used throughout development for brainstorming, technical research, architecture exploration, coding assistance, debugging, refactoring, and deployment troubleshooting. Product direction, requirements, architecture decisions, feature prioritization, testing, and deployment decisions were driven and evaluated by the developer. The project moved through an iterative loop: idea → prototype → real-world usage → identify problems → implement → test → refine → deploy. What This Project Demonstrates Full-stack engineering — Next.js App Router, RESTstyle API design, relational data modeling, order lifecycle and billing logic, batch-level inventory management, analytics, and audit logging. Security — JWT sessions, password hashing, rolebased access control, server-side validation, and rate limiting. DevOps & cloud infrastructure — Docker, Linux server administration, AWS EC2, GitHub Actions CI/CD, container registries, AWS IAM, GitHub OIDC, AWS Systems Manager, and reverse proxy configuration.Project Status Current status: 🟢 Core system operational Area Status Customer ordering, search, cart Order tracking & purchase history ✅ Operational ✅ Operational Staff dashboard & order processing Batch & inventory management ✅ Operational Expiry monitoring Owner dashboard & sales analytics ✅ Operational ✅ Operational ✅ Operational Audit logs JWT auth & role-based authorization ✅ Operational ✅ Operational Docker / AWS deployment GitHub Actions CI/CD ✅ Operational ✅ OperationalArea Status Phone OTP Google Maps 🟡 Pending production config 🟡 Needs further work HTTPS / custom domain Author and Contact 🔵 Planned Priyanshu Kumar B.Tech — Computer Science & Technology, SAGE University, Indore (2026–2030) Interested in software engineering, full-stack development, backend systems, AI/ML, and system architecture. Learns primarily by building real systems and applying concepts to practical problems. Email Phone krpriyanshu952@gmail.com 7004022705 LinkedIn linkedin.com/in/anshu-kumar8735ba377GitHub Portfolio github.com/priyanshu-kumar952 Coming soon Built For Mithila Medico Gauriya Math, Gandhi Path, Jakkanpur, Gardanibagh Patna, Bihar 800001 Developed as a real-world software prototype based on this pharmacy's actual operating workflow. License No license has been specified yet. Until a fi LICENSE le is added, all rights are reserved by the author.
+Absolutely. I’ll keep the content you provided as the basis, but fix the formatting so GitHub renders it properly. I’ll also correct the outdated GitHub/repository information from the earlier draft and use your actual repository name.
+
+Copy **everything inside this single box** and paste it directly into your `README.md`:
+
+````markdown
+# 💊 Medico — Pharmacy E-Commerce & Management Platform
+
+### A full-stack platform built around the real operational workflow of a neighborhood pharmacy.
+
+Medico is a full-stack pharmacy e-commerce and management platform built around the real-world workflow of **Mithila Medico, Gardanibagh, Patna, Bihar**.
+
+The platform brings customer ordering, pharmacy operations, batch-level inventory, billing, analytics, and audit logging into a single system.
+
+**Next.js · React · SQLite · Docker · AWS**
+
+> 🚀 **Deployed on AWS EC2 with Docker and automated CI/CD through GitHub Actions.**
+>
+> 🟢 Core ordering, inventory, staff, owner, and analytics workflows are operational.
+>
+> 🟡 Customer phone OTP and Google Maps integration are not currently active in production.
+
+---
+
+## 🌐 Live Demo
+
+**Live Application:**  
+http://43.204.216.145/
+
+---
+
+## 📑 Table of Contents
+
+- [Overview](#-overview)
+- [Why I Built This](#-why-i-built-this)
+- [Features](#-features)
+  - [Customer Experience](#-customer-experience)
+  - [Staff Operations](#-staff-operations)
+  - [Owner / Admin Dashboard](#-owner--admin-dashboard)
+- [Screenshots](#-screenshots)
+- [System Architecture](#-system-architecture)
+- [Authentication and Security](#-authentication-and-security)
+- [Database Design](#-database-design)
+- [Order and Billing Logic](#-order-and-billing-logic)
+- [Analytics and Audit Logging](#-analytics-and-audit-logging)
+- [Tech Stack](#-tech-stack)
+- [Deployment Architecture](#-deployment-architecture)
+- [CI/CD Pipeline](#-cicd-pipeline)
+- [Project Structure](#-project-structure)
+- [API Reference](#-api-reference)
+- [Testing and QA](#-testing-and-qa)
+- [Getting Started](#-getting-started)
+- [Current Limitations](#-current-limitations)
+- [Roadmap](#-roadmap)
+- [AI-Assisted Development](#-ai-assisted-development)
+- [What This Project Demonstrates](#-what-this-project-demonstrates)
+- [Project Status](#-project-status)
+- [Author and Contact](#-author-and-contact)
+- [Built For](#-built-for)
+- [License](#-license)
+
+---
+
+# 📌 Overview
+
+Local pharmacies often operate through a combination of in-store purchases, phone calls, and WhatsApp messages.
+
+Medico digitizes that workflow into a structured software system while keeping the operational simplicity of a local pharmacy.
+
+The platform was built specifically around the workflow of **Mithila Medico in Gardanibagh, Patna, Bihar**.
+
+The system serves three distinct roles from a single codebase:
+
+| Role | Purpose |
+|---|---|
+| 👤 **Customer** | Search medicines, place orders, track status, and access order history |
+| 👨‍💼 **Staff** | Process orders, select fulfillment batches, manage stock, and monitor alerts |
+| 👑 **Owner / Admin** | Monitor operations, sales, inventory, analytics, and audit history |
+
+---
+
+# 💡 Why I Built This
+
+This project started as a way to test whether I could design and deliver a complete software system before approaching businesses as a freelancer.
+
+I was considering starting a freelancing agency with a friend. Rather than immediately trying to build something for a client, I decided to create a real-world prototype first.
+
+I chose **Mithila Medico**, a pharmacy I already knew, as the case study because I was familiar with how the business operates locally.
+
+The initial scope was deliberately small:
+
+```text
+Customer places an order
+        ↓
+Staff receives the order
+        ↓
+Staff packs the medicines
+        ↓
+Customer is notified
+        ↓
+Owner can monitor the operation
+````
+
+As I used and tested the system from the perspective of a customer, staff member, and owner, additional requirements naturally appeared.
+
+The project gradually evolved to include:
+
+* Batch-level inventory
+* Expiry monitoring
+* Stock validation
+* Billing calculated during packing
+* Sales analytics
+* Date-range reporting
+* Order audit logs
+* Inventory audit logs
+* Role-based authorization
+* Transactional order processing
+* Automated CI/CD deployment
+
+What began as a small prototype became a considerably more complete pharmacy management system.
+
+---
+
+# ✨ Features
+
+## 👤 Customer Experience
+
+### Medicine Ordering
+
+* Search medicines by name
+* Add medicines to cart
+* Adjust quantities
+* Validate available stock
+* Enter customer information
+* Place pickup orders
+* Optionally provide a delivery address
+* Receive order confirmation
+* Track order status
+* Cancel eligible orders
+* Download invoices
+* View previous purchases
+
+### Order Lifecycle
+
+```text
+Placed
+   ↓
+Packed
+   ↓
+Completed
+```
+
+Orders can also be cancelled when permitted by the workflow.
+
+---
+
+# 👨‍💼 Staff Operations
+
+The Staff Panel provides the operational interface for receiving and processing customer orders.
+
+## Order Management
+
+Staff can:
+
+* View incoming orders
+* Search by order ID
+* Search by customer name
+* Search by phone number
+* Search by bill information
+* Filter orders by status
+* Filter orders by date
+* Sort orders
+* Open individual orders
+* Confirm prices
+* Select the exact inventory batch used for fulfillment
+* Pack orders
+* Generate final billing information
+* Cancel orders when required
+
+## Inventory Operations
+
+Staff can:
+
+* View medicines
+* View stock quantities
+* Manage individual inventory batches
+* Add medicines
+* Add batches
+* Update inventory
+* Configure low-stock thresholds
+* Monitor stock levels
+
+## Inventory Alerts
+
+The dashboard provides alerts for:
+
+* 🔶 Low-stock medicines
+* 🔴 Expired medicines
+* 🟠 Critical upcoming expiries
+
+---
+
+# 👑 Owner / Admin Dashboard
+
+The Owner Dashboard provides a higher-level view of pharmacy operations.
+
+## Order Management
+
+* Complete order overview
+* Order status filtering
+* Date-range filtering
+* Order search
+* Individual order details
+* Order history
+* Operational monitoring
+
+## Sales Analytics
+
+The dashboard provides:
+
+* Total revenue
+* Completed order count
+* Average order value
+* Units sold
+* Daily revenue trends
+* Top-selling medicines
+* Daily performance breakdown
+* Custom date-range analysis
+* Predefined timeframe analysis
+
+## Inventory Management
+
+* Medicine management
+* Batch management
+* Stock monitoring
+* Expiry monitoring
+* Inventory history
+
+## Audit & Logs
+
+* Inventory logs
+* Order logs
+* Traceable operational history
+
+---
+
+# 🖼️ Screenshots
+
+> Screenshots can be added to `docs/screenshots/` and referenced here as the repository is expanded.
+
+## Customer Interface
+
+### Pharmacy Landing Page
+
+The customer-facing application provides pharmacy information, medicine ordering, order tracking, and access to previous orders.
+
+![Customer Home Page](docs/screenshots/customer-home.png)
+
+### Medicine Search & Cart
+
+Customers can search for medicines, add them to their cart, adjust quantities, and place an order.
+
+![Medicine Search and Cart](docs/screenshots/customer-order.png)
+
+### Order Tracking
+
+Customers can track order status and access billing information once the order has been processed.
+
+![Order Tracking](docs/screenshots/order-tracking.png)
+
+### Purchase History
+
+Customers can retrieve previous orders and download available invoices.
+
+![Purchase History](docs/screenshots/purchase-history.png)
+
+---
+
+## Staff Interface
+
+### Staff Dashboard
+
+The Staff Panel provides order counts, search, filtering, inventory access, and order management.
+
+![Staff Dashboard](docs/screenshots/staff-dashboard.png)
+
+### Order Processing & Batch Selection
+
+Staff can inspect an order and select the exact inventory batch used to fulfill each requested medicine.
+
+![Staff Order Processing](docs/screenshots/staff-order-processing.png)
+
+### Inventory Alerts
+
+Low-stock and expiry conditions are surfaced directly through the dashboard.
+
+![Inventory Alerts](docs/screenshots/inventory-alerts.png)
+
+---
+
+## Owner Interface
+
+### Sales Analytics
+
+The Owner Dashboard provides revenue, order, sales, and performance analytics.
+
+![Sales Analytics](docs/screenshots/sales-analytics.png)
+
+### Inventory Management
+
+The owner can manage medicines and their associated inventory batches.
+
+![Inventory Management](docs/screenshots/inventory-management.png)
+
+---
+
+# 🏗️ System Architecture
+
+Medico is implemented as a single Next.js application serving all three user interfaces and the backend API.
+
+```text
+                         MEDICO
+                           │
+          ┌────────────────┼────────────────┐
+          │                │                │
+          ▼                ▼                ▼
+      Customer           Staff           Owner
+      Interface        Interface        Interface
+          │                │                │
+          └────────────────┼────────────────┘
+                           │
+                           ▼
+                   Next.js Application
+                           │
+                 ┌─────────┴─────────┐
+                 │                   │
+                 ▼                   ▼
+             Frontend           API Routes
+                                     │
+                                     ▼
+                              Business Logic
+                                     │
+                                     ▼
+                              SQLite Database
+                                     │
+                                better-sqlite3
+```
+
+---
+
+# 🔐 Authentication and Security
+
+Medico implements server-side authentication and role-based authorization.
+
+## Authentication
+
+* Password hashing with `bcryptjs`
+* JWT-based sessions
+* `jose` for JWT operations
+* HS256 signing
+* Token expiration
+* HTTP-only session cookies
+
+## Authorization
+
+Access is separated by role:
+
+```text
+Customer
+   │
+   └── Customer functionality
+
+Staff
+   │
+   └── Order + Inventory operations
+
+Owner / Admin
+   │
+   └── Full operational + analytical access
+```
+
+Protected routes perform server-side authorization checks rather than relying only on frontend visibility.
+
+## Additional Protections
+
+The application also uses:
+
+* Input validation
+* Server-side validation
+* Rate limiting for sensitive operations
+* Transactional database operations
+* Foreign-key enforcement
+* Database indexes on frequently queried data
+
+---
+
+# 🗄️ Database Design
+
+Medico uses **SQLite** through `better-sqlite3`.
+
+One of the key database design decisions is separating medicines from their individual inventory batches.
+
+This allows stock and expiry information to be tracked at the **batch level**.
+
+```text
+Medicine
+   │
+   ├── Batch A
+   │      ├── Quantity
+   │      ├── MRP
+   │      ├── Discount
+   │      ├── Manufacturing Date
+   │      └── Expiry Date
+   │
+   ├── Batch B
+   │      ├── Quantity
+   │      ├── MRP
+   │      └── Expiry Date
+   │
+   └── Batch C
+          └── ...
+```
+
+The database architecture also uses:
+
+* Foreign keys
+* WAL mode
+* Indexes
+* Transactions
+* Database migrations
+* Seed data
+* Persistent production storage
+
+---
+
+# 💰 Order and Billing Logic
+
+Stock and order state must remain consistent during fulfillment.
+
+Order processing follows a controlled transactional workflow:
+
+```text
+Customer Order
+      ↓
+Validate Requested Quantities
+      ↓
+Create Order
+      ↓
+Staff Selects Actual Batch
+      ↓
+Validate Batch Stock
+      ↓
+Calculate Final Price
+      ↓
+Update Inventory
+      ↓
+Generate Bill
+      ↓
+Record Order History
+```
+
+A key business rule is that the **final price is calculated during packing**, based on the actual inventory batch selected by staff.
+
+This means the price used for the final bill can reflect the actual batch that was fulfilled rather than assuming every batch of a medicine has identical pricing.
+
+---
+
+# 📊 Analytics and Audit Logging
+
+## Analytics
+
+The Owner Dashboard provides:
+
+* Total revenue
+* Daily revenue
+* Revenue trends
+* Order counts by status
+* Units sold
+* Average order value
+* Top-selling medicines
+* Daily sales performance
+* Custom date-range reporting
+
+Order statuses include:
+
+```text
+Placed
+Packed
+Completed
+Cancelled
+```
+
+## Audit Logging
+
+The system maintains separate operational records for:
+
+* Order activity
+* Inventory activity
+
+This provides visibility into how orders and stock changed over time.
+
+---
+
+# 🛠️ Tech Stack
+
+| Category           | Technology                |
+| ------------------ | ------------------------- |
+| Framework          | Next.js 16                |
+| Frontend           | React 19                  |
+| Language           | JavaScript                |
+| Database           | SQLite                    |
+| Database Driver    | better-sqlite3            |
+| Authentication     | JWT                       |
+| JWT Library        | jose                      |
+| Password Hashing   | bcryptjs                  |
+| Customer OTP       | Firebase                  |
+| Charts             | Recharts                  |
+| Icons              | Lucide React              |
+| Containerization   | Docker                    |
+| Reverse Proxy      | Caddy                     |
+| Cloud Hosting      | AWS EC2                   |
+| Container Registry | GitHub Container Registry |
+| CI/CD              | GitHub Actions            |
+| AWS Authentication | GitHub OIDC + IAM         |
+| Remote Deployment  | AWS Systems Manager       |
+| Operating System   | Linux                     |
+
+---
+
+# ☁️ Deployment Architecture
+
+The production application is deployed on AWS EC2.
+
+```text
+                         Internet
+                            │
+                            ▼
+                     AWS EC2 Instance
+                            │
+                            ▼
+                         Caddy :80
+                       Reverse Proxy
+                            │
+                            ▼
+                    Docker Container
+                       ┌───────────┐
+                       │  Medico   │
+                       │ Next.js   │
+                       │   :3000   │
+                       └─────┬─────┘
+                             │
+                             ▼
+                      SQLite Database
+                             │
+                             ▼
+                    Persistent Volume
+```
+
+Caddy proxies incoming requests to the Next.js application running inside Docker.
+
+The SQLite database is stored using persistent storage so that replacing the application container does not wipe application data.
+
+---
+
+# 🔄 CI/CD Pipeline
+
+Medico uses GitHub Actions for automated validation, container publishing, and deployment.
+
+```text
+Developer
+    │
+    ▼
+Git Push
+    │
+    ▼
+GitHub Repository
+    │
+    ▼
+GitHub Actions
+    │
+    ├── Install dependencies
+    ├── ESLint
+    └── Next.js production build
+    │
+    ▼
+Docker Image Build
+    │
+    ▼
+GitHub Container Registry
+    │
+    ▼
+AWS OIDC / IAM
+    │
+    ▼
+AWS Systems Manager
+    │
+    ▼
+EC2 Instance
+    │
+    ├── Pull latest image
+    ├── Replace application container
+    └── Preserve persistent database volume
+    │
+    ▼
+Health Check
+    │
+    ▼
+Deployed Application
+```
+
+This provides an automated path from a code change to a deployed production container.
+
+---
+
+# 🐳 Docker
+
+The production application runs inside a Docker container.
+
+Containerization provides:
+
+* Consistent runtime environment
+* Reproducible builds
+* Simplified deployment
+* Application isolation
+* Easy container replacement
+* Persistent database storage outside the application container
+
+---
+
+# 📁 Project Structure
+
+```text
+medico/
+│
+├── .github/
+│   └── workflows/
+│
+├── app/
+│   ├── about/
+│   ├── admin/
+│   │   └── dashboard/
+│   ├── staff/
+│   │   ├── dashboard/
+│   │   ├── login/
+│   │   └── orders/
+│   ├── history/
+│   ├── order-confirmation/
+│   ├── track/
+│   │
+│   └── api/
+│       ├── auth/
+│       ├── batches/
+│       ├── health/
+│       ├── inventory/
+│       ├── medicines/
+│       ├── order-logs/
+│       ├── orders/
+│       ├── otp/
+│       └── stats/
+│
+├── components/
+├── lib/
+├── public/
+├── scripts/
+│
+├── Dockerfile
+├── docker-compose.yml
+├── next.config.mjs
+├── migrate_db.js
+├── package.json
+└── README.md
+```
+
+---
+
+# 🔌 API Reference
+
+The backend is implemented using **Next.js Route Handlers**.
+
+| Endpoint                    | Purpose                                     |
+| --------------------------- | ------------------------------------------- |
+| `/api/auth`                 | Authentication and session handling         |
+| `/api/medicines`            | Medicine catalog operations                 |
+| `/api/medicines/[id]`       | Single medicine details and updates         |
+| `/api/medicines/[id]/stock` | Stock information for a medicine            |
+| `/api/medicines/inventory`  | Combined medicine and inventory information |
+| `/api/batches`              | Batch-level inventory management            |
+| `/api/batches/[id]`         | Individual batch operations                 |
+| `/api/inventory/logs`       | Inventory audit logs                        |
+| `/api/orders`               | Order creation and listing                  |
+| `/api/orders/[id]`          | Individual order details                    |
+| `/api/orders/[id]/pack`     | Batch selection, packing, and billing       |
+| `/api/order-logs`           | Order audit logs                            |
+| `/api/stats`                | General dashboard statistics                |
+| `/api/stats/daily-sales`    | Daily sales breakdown                       |
+| `/api/stats/medicines`      | Medicine sales statistics                   |
+| `/api/otp/send`             | Customer phone OTP                          |
+| `/api/otp/verify`           | Customer phone OTP verification             |
+| `/api/health`               | Application health check                    |
+
+---
+
+# 🧪 Testing and QA
+
+The application has been manually tested from the perspective of all three major roles:
+
+```text
+Customer
+   ↓
+Staff
+   ↓
+Owner / Admin
+```
+
+Testing focused on complete business workflows rather than isolated UI components.
+
+### Customer Workflows
+
+* Medicine search
+* Cart operations
+* Order placement
+* Order tracking
+* Purchase history
+
+### Staff Operations
+
+* Order processing
+* Batch selection
+* Inventory operations
+* Low-stock alerts
+* Expiry alerts
+* Order filtering
+
+### Dashboards & Analytics
+
+* Order filtering
+* Date-range filtering
+* Sales analytics
+* Dashboard statistics
+
+### Authentication, Data & Infrastructure
+
+* Authentication
+* Authorization
+* Database operations
+* Docker deployment
+* CI/CD deployment
+
+---
+
+# 🚀 Getting Started
+
+## Prerequisites
+
+* Node.js
+* npm
+* Git
+
+## Clone the Repository
+
+```bash
+git clone https://github.com/priyanshu-kumar952/medico-an-e-commerce-web-application.git
+cd medico-an-e-commerce-web-application
+```
+
+## Install Dependencies
+
+```bash
+npm install
+```
+
+## Initialize the Database
+
+```bash
+node migrate_db.js
+```
+
+## Start Development Server
+
+```bash
+npm run dev
+```
+
+The application will run at:
+
+```text
+http://localhost:3000
+```
+
+## Production Build
+
+```bash
+npm run build
+npm start
+```
+
+---
+
+# 🔑 Environment Variables
+
+Create a `.env.local` file and provide the environment-specific values required by the application.
+
+Example:
+
+```env
+JWT_SECRET=your-secret-key
+
+FIREBASE_API_KEY=your-firebase-key
+FIREBASE_AUTH_DOMAIN=your-firebase-domain
+FIREBASE_PROJECT_ID=your-firebase-project-id
+
+DATABASE_PATH=./data/medico.db
+```
+
+> **Never commit real secrets, Firebase credentials, production database files, or private infrastructure credentials to the repository.**
+
+---
+
+# 🐳 Run with Docker
+
+```bash
+docker-compose up --build
+```
+
+The application will then be available through the configured Docker port.
+
+---
+
+# ⚠️ Current Limitations
+
+## Customer Phone OTP
+
+Firebase Phone Authentication is implemented in the application, but production SMS verification requires the appropriate Firebase billing configuration.
+
+Therefore, customer phone OTP is currently not active in production.
+
+## Google Maps
+
+The pharmacy location integration is not functioning as intended yet.
+
+The project uses publicly available location information for Mithila Medico and does **not** use private Google credentials belonging to the business.
+
+These integrations are planned for future refinement.
+
+---
+
+# 🗺️ Roadmap
+
+* [ ] Enable production phone OTP verification
+* [ ] Fix and improve Google Maps integration
+* [ ] Add HTTPS and a custom domain
+* [ ] Improve automated test coverage
+* [ ] Add more advanced analytics
+* [ ] Improve mobile experience
+* [ ] Expand notification capabilities
+* [ ] Add additional pharmacy operational features
+* [ ] Improve deployment observability
+
+---
+
+# 🤖 AI-Assisted Development
+
+AI tools were used extensively throughout development as engineering assistants.
+
+The development workflow included:
+
+* **ChatGPT**
+* **Antigravity IDE and its native AI agent**
+
+AI assistance was used for:
+
+* Brainstorming
+* Technical research
+* Architecture exploration
+* Coding assistance
+* Debugging
+* Error analysis
+* Refactoring
+* Exploring implementation alternatives
+* QA reasoning
+* Deployment troubleshooting
+
+The overall product direction, requirements, architecture decisions, feature prioritization, testing, and deployment decisions were driven and evaluated by the developer.
+
+The project followed an iterative development cycle:
+
+```text
+Idea
+ ↓
+Prototype
+ ↓
+Real-world usage
+ ↓
+Identify problems
+ ↓
+Implement solution
+ ↓
+Test
+ ↓
+Refine
+ ↓
+Deploy
+```
+
+---
+
+# 📈 What This Project Demonstrates
+
+## Full-Stack Engineering
+
+* Next.js App Router
+* React
+* REST-style API design
+* Relational data modeling
+* Order lifecycle design
+* Billing logic
+* Batch-level inventory management
+* Analytics
+* Audit logging
+
+## Security
+
+* JWT sessions
+* Password hashing
+* Role-based access control
+* Server-side authorization
+* Server-side validation
+* Rate limiting
+
+## Database Engineering
+
+* SQLite
+* Relational schema design
+* Transactions
+* Foreign keys
+* Indexing
+* WAL mode
+* Migrations
+* Persistent storage
+
+## DevOps & Cloud Infrastructure
+
+* Docker
+* Linux server administration
+* AWS EC2
+* GitHub Actions
+* GitHub Container Registry
+* AWS IAM
+* GitHub OIDC
+* AWS Systems Manager
+* Caddy reverse proxy
+
+---
+
+# 📊 Project Status
+
+### Current Status: 🟢 Core System Operational
+
+| Area                     | Status                              |
+| ------------------------ | ----------------------------------- |
+| Customer ordering        | ✅ Operational                       |
+| Medicine search          | ✅ Operational                       |
+| Cart                     | ✅ Operational                       |
+| Order tracking           | ✅ Operational                       |
+| Purchase history         | ✅ Operational                       |
+| Staff dashboard          | ✅ Operational                       |
+| Order processing         | ✅ Operational                       |
+| Batch management         | ✅ Operational                       |
+| Inventory management     | ✅ Operational                       |
+| Expiry monitoring        | ✅ Operational                       |
+| Owner dashboard          | ✅ Operational                       |
+| Sales analytics          | ✅ Operational                       |
+| Audit logs               | ✅ Operational                       |
+| JWT authentication       | ✅ Operational                       |
+| Role-based authorization | ✅ Operational                       |
+| Docker deployment        | ✅ Operational                       |
+| AWS deployment           | ✅ Operational                       |
+| GitHub Actions CI/CD     | ✅ Operational                       |
+| Phone OTP                | 🟡 Pending production configuration |
+| Google Maps              | 🟡 Needs further work               |
+| HTTPS / custom domain    | 🔵 Planned                          |
+
+---
+
+# 👨‍💻 Author and Contact
+
+## Priyanshu Kumar
+
+**B.Tech — Computer Science & Technology**
+**SAGE University, Indore | 2026–2030**
+
+Interested in:
+
+* Software Engineering
+* Full-Stack Development
+* Backend Systems
+* AI/ML
+* System Architecture
+
+I primarily learn by building real systems, understanding how they work, and applying technical concepts to practical problems.
+
+### Contact
+
+| Platform     | Details                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------- |
+| 📧 Email     | `krpriyanshu952@gmail.com`                                                                  |
+| 📱 Phone     | `7004022705`                                                                                |
+| 💼 LinkedIn  | [linkedin.com/in/anshu-kumar-8735ba377](https://www.linkedin.com/in/anshu-kumar-8735ba377/) |
+| 🐙 GitHub    | [github.com/priyanshu-kumar952](https://github.com/priyanshu-kumar952)                      |
+| 🌐 Portfolio | Coming Soon                                                                                 |
+
+---
+
+# 🏪 Built For
+
+## Mithila Medico
+
+**Gauriya Math, Gandhi Path, Jakkanpur, Gardanibagh**
+**Patna, Bihar 800001**
+
+Medico was developed as a real-world software prototype based on the operating workflow of this local pharmacy.
+
+The project uses publicly available business information for the pharmacy and does not use private Google credentials or private business credentials.
+
+---
+
+# 📄 License
+
+No open-source license has been specified yet.
+
+Until a `LICENSE` file is added to the repository, the project remains **all rights reserved by the author**.
+
+---
+
+<p align="center">
+
+### 💊 Medico
+
+**Turning a real pharmacy workflow into a complete software system.**
+
+Built with **Next.js · React · SQLite · Docker · AWS**
+
+</p>
+```
+
+One important thing before you paste it: **I intentionally did not put your phone number or personal email into a `mailto:` link or expose any other private credentials.** The contact details you explicitly gave me are included, but your `.env` values should never be committed to GitHub.
+
+Also, the screenshot paths in the README are placeholders right now. **Don't worry about them yet**—since you already have the screenshots, we can next create a proper `docs/screenshots/` structure and put the actual images into the repository so the README becomes a polished visual portfolio rather than just text. The content itself is now ready to paste. 
