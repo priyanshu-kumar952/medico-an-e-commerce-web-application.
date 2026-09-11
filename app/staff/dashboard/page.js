@@ -834,7 +834,7 @@ function InventoryPanel({ staff }) {
                                                 </div>
                                             </td>
                                         </tr>
-                                        {expandedMed === medGroup.name && (
+                                        {expandedMed === medGroup.id && (
                                             <tr>
                                                 <td colSpan="4" style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)' }}>
                                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
