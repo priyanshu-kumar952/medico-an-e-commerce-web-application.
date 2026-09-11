@@ -110,7 +110,7 @@ export default function AboutPage() {
                             <div className="glass-card">
                                 <h3 style={{ marginBottom: '1rem', fontSize: '1.15rem' }}>📍 Find Us</h3>
                                 <div style={{ borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                                    <a href="https://maps.app.goo.gl/xy7TW8nfdSmihvqGA" target="_blank" rel="noopener noreferrer"><iframe
+                                    <a href="https://www.google.com/maps/search/?api=1&query=25.5976946,85.1268892" target="_blank" rel="noopener noreferrer"><iframe
                                         src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3597.9!2d85.155!3d25.596!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMjXCsDM1JzQ1LjYiTiA4NcKwMDknMTguMCJF!5e0!3m2!1sen!2sin!4v1709471234567!5m2!1sen!2sin"
                                         width="100%" height="250" style={{ border: 0 }} allowFullScreen="" loading="lazy"
                                         referrerPolicy="no-referrer-when-downgrade"
