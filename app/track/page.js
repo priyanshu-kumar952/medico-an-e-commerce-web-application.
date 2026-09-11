@@ -21,10 +21,19 @@ function TrackContent() {
         setSearched(true);
         setOrdersList([]);
         try {
+            // Track Order should only show PLACED and PACKED orders.
+            const allowedStatuses = ['PLACED', 'PACKED'];
+
             // First try ID search
             let res = await fetch(`/api/orders/${encodeURIComponent(query.trim())}`);
             if (res.ok) {
                 const data = await res.json();
+
+                if (!data.order || !allowedStatuses.includes(data.order.status)) {
+                    addToast('No active order found', 'info');
+                    return;
+                }
+
                 setOrdersList([{ order: data.order, items: data.items }]);
                 return;
             }
@@ -32,19 +41,20 @@ function TrackContent() {
             // Fallback to phone search
             res = await fetch(`/api/orders?phone=${encodeURIComponent(query.trim())}`);
             const data = await res.json();
+
             if (data.orders && data.orders.length > 0) {
-                let filteredOrders = data.orders.filter(o => o.status !== 'CANCELLED');
-                
-                // If not history mode, only show active orders (not completed)
-                if (!isHistory) {
-                    filteredOrders = filteredOrders.filter(o => o.status !== 'COMPLETED');
-                }
+                const filteredOrders = data.orders.filter(
+                    o => allowedStatuses.includes(o.status)
+                );
 
                 if (filteredOrders.length === 0) {
-                    addToast(isHistory ? 'No order history found' : 'No active orders found', 'info');
+                    addToast('No active orders found', 'info');
                     return;
                 }
-                const detailsPromises = filteredOrders.map(o => fetch(`/api/orders/${o.order_id}`).then(r => r.json()));
+
+                const detailsPromises = filteredOrders.map(
+                    o => fetch(`/api/orders/${o.order_id}`).then(r => r.json())
+                );
                 const details = await Promise.all(detailsPromises);
                 setOrdersList(details);
             } else {

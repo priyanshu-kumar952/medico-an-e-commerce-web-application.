@@ -22,7 +22,7 @@ export async function GET(request) {
 
         if (query) {
             sql += ' AND m.name LIKE ?';
-            params.push(`%${query}%`);
+            params.push(`${query}%`);
         }
 
         if (category) {

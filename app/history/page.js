@@ -21,30 +21,44 @@ function HistoryContent() {
         setSearched(true);
         setOrdersList([]);
         try {
+            // Previous Orders should only show COMPLETED (Collected) orders.
+            const allowedStatus = 'COMPLETED';
+
             // First try ID search (in case they put bill id)
             let res = await fetch(`/api/orders/${encodeURIComponent(query.trim())}`);
             if (res.ok) {
                 const data = await res.json();
+
+                if (!data.order || data.order.status !== allowedStatus) {
+                    addToast('No previous order found', 'info');
+                    return;
+                }
+
                 setOrdersList([{ order: data.order, items: data.items }]);
                 return;
             }
 
-            // Fallback to phone search (History mode enabled: show COMPLETED)
+            // Fallback to phone search
             res = await fetch(`/api/orders?phone=${encodeURIComponent(query.trim())}`);
             const data = await res.json();
+
             if (data.orders && data.orders.length > 0) {
-                // Filter out CANCELLED but show COMPLETED and others
-                let filteredOrders = data.orders.filter(o => o.status !== 'CANCELLED');
-                
+                const filteredOrders = data.orders.filter(
+                    o => o.status === allowedStatus
+                );
+
                 if (filteredOrders.length === 0) {
-                    addToast('No order history found', 'info');
+                    addToast('No previous orders found', 'info');
                     return;
                 }
-                const detailsPromises = filteredOrders.map(o => fetch(`/api/orders/${o.order_id}`).then(r => r.json()));
+
+                const detailsPromises = filteredOrders.map(
+                    o => fetch(`/api/orders/${o.order_id}`).then(r => r.json())
+                );
                 const details = await Promise.all(detailsPromises);
                 setOrdersList(details);
             } else {
-                addToast('No order history found', 'error');
+                addToast('No previous orders found', 'error');
             }
         } catch (err) {
             addToast('Search failed', 'error');
