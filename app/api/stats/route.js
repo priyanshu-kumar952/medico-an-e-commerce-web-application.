@@ -139,6 +139,7 @@ export async function GET(request) {
       completed,
       cancelled,
       total_orders: totalOrders,
+      completed_orders: completedOrdersInTimeframe,
       today_revenue: todayRevenue,
       week_revenue: weekRevenue,
       month_revenue: monthRevenue,

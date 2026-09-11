@@ -594,8 +594,8 @@ function AdminDashboardContent() {
                                     <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Total Orders</span>
                                     <ShoppingBag size={18} color="var(--accent-blue)" />
                                 </div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: '700', marginTop: '0.5rem' }}>{stats.total_orders}</div>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>All orders in selected timeframe</div>
+                                <div style={{ fontSize: '1.5rem', fontWeight: '700', marginTop: '0.5rem' }}>{stats.completed_orders}</div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Completed orders in selected timeframe</div>
                             </div>
                             <div className="glass-card" style={{ marginBottom: 0, padding: '1.25rem', borderLeft: '4px solid var(--accent-amber)' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
